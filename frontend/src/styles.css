@@ -1,0 +1,62 @@
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --border: #e3e6ea; --text: #1f2328; --muted: #6b7280;
+  --primary: #2563eb; --primary-ink: #ffffff; --good: #16a34a; --bad: #dc2626; --warn-bg: #fff7e6; --warn-ink: #92400e;
+  --mono: "JetBrains Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: var(--mono); font-size: 0.85em; }
+
+.app { display: flex; flex-direction: column; min-height: 100%; }
+.topbar { display: flex; align-items: center; gap: 24px; padding: 0 24px; height: 52px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.brand { font-weight: 700; letter-spacing: -0.01em; }
+.tabs { display: flex; gap: 4px; }
+.tab { border: 0; background: transparent; padding: 8px 12px; border-radius: 6px; cursor: pointer; color: var(--muted); font: inherit; }
+.tab.active { color: var(--text); background: var(--bg); font-weight: 600; }
+.content { flex: 1; width: 100%; max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+
+.askbar { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 16px; }
+.askbar textarea, .askbar input { flex: 1; font: inherit; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); resize: vertical; }
+.btn { font: inherit; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; white-space: nowrap; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.panel-title { font-weight: 600; margin-bottom: 8px; }
+.muted { color: var(--muted); }
+.alert { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
+.alert.error { background: #fef2f2; color: var(--bad); }
+.alert.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.empty { padding: 40px 0; text-align: center; }
+.answer :first-child { margin-top: 0; }
+.answer :last-child { margin-bottom: 0; }
+.answer.notfound { color: var(--muted); }
+
+.sources { padding-left: 0; list-style: none; margin: 0; }
+.sources li { padding: 6px 0; border-top: 1px solid var(--border); }
+.sources li:first-child { border-top: 0; }
+.sources .idx { font-family: var(--mono); color: var(--muted); margin-right: 8px; }
+.sources .title { font-weight: 500; }
+.kind { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 4px; font-size: 11px; background: #eef2ff; color: #3730a3; }
+.kind.attachment { background: #ecfdf5; color: #065f46; }
+.sources .meta { font-size: 12px; margin-left: 26px; }
+
+.results { list-style: none; padding: 0; margin: 0; }
+.result { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
+.result-head { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.result-head .title { font-weight: 500; }
+.result-head .scores { margin-left: auto; font-family: var(--mono); font-size: 12px; display: flex; gap: 10px; }
+.result-meta { font-size: 12px; margin-top: 2px; }
+.chunk { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; background: var(--bg); border-radius: 6px; padding: 10px; margin: 8px 0 0; max-height: 320px; overflow: auto; }
+
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
