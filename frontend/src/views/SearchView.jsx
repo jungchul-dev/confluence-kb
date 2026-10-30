@@ -121,7 +121,7 @@ export default function SearchView() {
                         <RankBadge label="키워드" rank={r.keyword_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="키워드(형태소) 검색 순위. 검색어 단어가 실제로 들어 있는 순서" />
                       </Box>
                       <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
-                        {r.heading ? `${r.heading} · ` : ''}{r.path} · {fmtDate(r.updated_at)}
+                        {r.path}{r.heading ? ` › ${r.heading}` : ''} · 수정 {fmtDate(r.updated_at)}
                       </Typography>
                     </Box>
                   )
@@ -172,7 +172,7 @@ export default function SearchView() {
                               </Tooltip>
                             </Box>
                             <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
-                              {d.path}{d.space_key ? ` · ${d.space_key}` : ''}{d.updated_at ? ` · ${fmtDate(d.updated_at)}` : ''}
+                              {d.path}{d.space_key ? ` · ${d.space_key}` : ''}{d.updated_at ? ` · 수정 ${fmtDate(d.updated_at)}` : ''}
                             </Typography>
                           </Box>
                         ))
