@@ -11,7 +11,7 @@ TestFlow AI(5173 / 8000 / 5432)와 같은 머신에서 함께 띄울 수 있도�
 |---|---|---|
 | `frontend/` React + Vite | **5174** | `cd frontend && ./run.sh` |
 | `backend/app` FastAPI API 서버 | **8001** | `cd backend && ./run.sh` |
-| `backend/worker` 동기화 워커 | - | `cd backend && ./sync.sh --mode full` |
+| `backend/worker` 동기화 워커 | - | `cd backend && ./sync.sh --mode full` (API 불가 시 `./sync.sh --source export --file 공간.zip --space KEY`) |
 | `db/` PostgreSQL 16 + pgvector + textsearch_ko (Docker) | **5433** | `cd db && ./run.sh` (컨테이너 `confluence-kb-postgres`, 볼륨 `confluence-kb-pgdata`) |
 
 ## 처음 띄우기
@@ -54,6 +54,7 @@ API 문서: http://localhost:8001/docs
 
 ## 운영 메모
 
+- **Confluence API 를 호출할 수 없는 환경**(403 등)에서는 브라우저로 공간 설정 → 내보내기 → HTML zip 을 받아 `./sync.sh --source export --file exports/PROJ.zip --space PROJ` 로 적재한다. zip 안의 페이지·첨부를 API 와 같은 객체로 바꿔(`worker/export_zip.py`) 같은 파이프라인을 태우므로 저장 형태가 같다. 항상 전체 적재지만 변경 감지가 해시를 보므로 바뀐 페이지만 재색인되고, zip 에 없는 페이지는 정리된다. 권한 정보가 없어 `EXPORT_ALLOWED_GROUPS` 의 공간별 그룹을 붙인다. 이전 적재보다 오래된 zip 은 거부한다(`--force` 로 무시).
 - 증분 동기화는 cron 으로 `./sync.sh --mode incremental` 을 30분마다, 전체 동기화(삭제 페이지 정리 포함)는 야간 1회 `--mode full` 을 권장한다. 단일 프로세스로 돌리려면 `--loop`. 예시는 `deploy/README.md`.
 - 임베딩 모델을 바꾸면 `db/run.sh --reset` 후 전체 동기화로 재색인한다.
 - 분석 탭의 클러스터링은 `documents.embedding`(제목 + 경로 접두를 뺀 본문 앞 1,200자) 을 쓴다. 청크 임베딩은 경로 접두 때문에 프로젝트·공간 기준으로 뭉치기 때문이다. 색인 시 자동으로 채워지며, 기존 데이터는 `backend/migrate_doc_embeddings.py` 로 채운다 (컬럼·인덱스도 만든다). 비어 있는 문서는 청크 평균으로 대체되고 화면에 개수가 표시된다. k=0 이면 실루엣 점수로 클러스터 수를 고르고, 제목은 본문 TF-IDF 키워드 상위 3개다.

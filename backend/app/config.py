@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     # 동기화
     sync_incremental_minutes: int = 30
     skip_space_permissions: bool = False  # true 면 검색 시 권한 체크를 건너뛴다 (동기화는 권한을 정상 수집)
+    export_allowed_groups: str = "*"  # 내보내기(zip) 적재 시 문서에 붙일 열람 그룹. "pm,finance" 또는 "PROJ=pm;NET=infra;*=*"
 
     @property
     def space_keys(self) -> List[str]:

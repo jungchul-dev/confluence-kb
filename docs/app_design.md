@@ -42,6 +42,7 @@ confluence-kb/
 │   └── worker/
 │       ├── run_sync.py             # 진입점: 공간 목록 순회
 │       ├── confluence_client.py    # REST 호출 (페이지·첨부·버전·권한), 호출 제한 대응
+│       ├── export_zip.py           # 공간 내보내기(HTML) zip → 페이지·첨부 (API 불가 환경)
 │       ├── parsers/
 │       │   ├── html_page.py        # 본문 HTML → 텍스트 (표·매크로 처리)
 │       │   ├── office.py           # docx/pptx/xlsx
@@ -65,6 +66,8 @@ TestFlow AI 의 `services/rag.py`(pgvector 검색), `services/rerank.py`(cross-e
 4. **청킹** — 헤딩(h1~h3) 단위로 자르고, 한 섹션이 길면 문단 경계에서 다시 나눈다(목표 600 · 최대 900 토큰 근사치, 겹침 10%). 각 청크 앞에 `공간 > 상위 페이지 > 페이지 제목 > 섹션` 경로를 붙인다. 첨부 청크는 `페이지 제목 > 첨부 파일명 > (슬라이드/시트/페이지 번호)` 를 붙인다.
 5. **임베딩** — 청크를 묶어 배치 호출. 같은 배치에 문서 1건(제목 + 경로 접두를 뺀 본문 앞 1,200자)을 더 넣어 `documents.embedding` 도 함께 만든다(분석·유사 문서용). 실패 시 지수 백오프 재시도, 3회 실패는 `sync_state.error` 에 남기고 다음 페이지로 넘어간다.
 6. **적재** — 문서(페이지 또는 첨부) 단위 트랜잭션으로 기존 청크 삭제 → 새 청크 삽입 → `sync_state` 갱신. 중간에 실패해도 이전 청크가 남아 검색은 계속된다. `chunks.tsv` 는 생성 컬럼이라 적재 시 PostgreSQL 이 한국어 형태소 분석(`textsearch_ko`, 설정 `korean`)으로 자동 계산한다. 경로 접두는 A, 본문은 B 가중치다.
+
+**API 를 쓸 수 없을 때(공간 내보내기 적재)** — 보안정책으로 REST 호출이 막힌 환경에서는 브라우저로 받은 '공간 내보내기(HTML)' zip 을 `./sync.sh --source export --file 공간.zip --space KEY` 로 적재한다. `worker/export_zip.py` 가 zip 의 index.html 트리와 페이지 파일, `attachments/<페이지id>/` 를 읽어 API 와 같은 페이지·첨부 객체를 만들고, 이후 단계(파싱·청킹·임베딩·적재·변경 감지·삭제 정리)는 동일하다. 버전이 없어 본문 해시로만 변경을 감지하고, 수정일은 내보내기 생성 시각(footer), 권한은 `EXPORT_ALLOWED_GROUPS` 의 공간별 그룹을 쓴다. 증분은 없고 항상 전체 적재이며, 이전에 적재한 것보다 오래된 zip 은 거부한다(`--force` 로 무시). 페이지 단위 조회 제한이 중요한 공간은 XML 내보내기 지원이 필요하다(미구현).
 
 권한은 페이지의 조회 제한(`restrictions`)과 공간 권한을 읽어 "읽을 수 있는 그룹 목록"으로 정규화해 청크마다 저장한다. 제한이 없는 페이지는 공간 기본 그룹을 쓴다.
 

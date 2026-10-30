@@ -3,6 +3,8 @@
   python -m worker.run_sync --mode full                 # 설정의 전체 공간, 전체 순회 (+ 삭제 페이지 정리)
   python -m worker.run_sync --mode incremental          # 마지막 성공 이후 수정분만
   python -m worker.run_sync --spaces PROJ,PLAN --loop   # SYNC_INCREMENTAL_MINUTES 간격으로 반복 (운영은 cron 권장)
+  python -m worker.run_sync --source export --file exports/PROJ.zip --space PROJ
+                                                       # API 없이 브라우저로 받은 '공간 내보내기(HTML)' zip 적재 (항상 full)
 
 초기 적재와 증분은 같은 함수(sync_space)가 처리하고 차이는 조회 조건뿐이다. 페이지마다:
   버전·해시 비교 → 본문 파싱·청킹·임베딩·적재 → 첨부 목록 조회 → 허용 첨부 다운로드·파싱·적재 → sync_state 갱신
@@ -10,6 +12,8 @@
 import argparse
 import asyncio
 import logging
+import os
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -19,6 +23,7 @@ from app.db.session import AsyncSessionLocal, ensure_schema
 from worker import indexer
 from worker.chunker import chunk_sections
 from worker.confluence_client import ConfluenceAttachment, ConfluenceClient, ConfluencePage
+from worker.export_zip import ExportZipClient
 from worker.parsers.html_page import parse_storage_html
 from worker.parsers.registry import is_allowed, parse_attachment
 
@@ -110,9 +115,10 @@ async def sync_page(client: ConfluenceClient, page: ConfluencePage, space_groups
             await db.commit()
 
 
-async def sync_space(client: ConfluenceClient, space_key: str, mode: str) -> SyncRun:
+async def sync_space(client, space_key: str, mode: str, *, message: Optional[str] = None) -> SyncRun:
+    """client 는 ConfluenceClient 또는 ExportZipClient. mode: full | incremental | export (export 는 full 과 같이 삭제 정리를 한다)."""
     async with AsyncSessionLocal() as db:
-        run = SyncRun(space_key=space_key, mode=mode)
+        run = SyncRun(space_key=space_key, mode=mode, message=message)
         db.add(run)
         await db.commit()
         await db.refresh(run)
@@ -126,7 +132,7 @@ async def sync_space(client: ConfluenceClient, space_key: str, mode: str) -> Syn
         async for page in client.iter_pages(space_key, modified_since=since):
             await sync_page(client, page, space_groups, run)
 
-        if mode == "full":
+        if mode in ("full", "export"):
             # 삭제·보관된 페이지 정리: Confluence 에 없는데 sync_state 에 남은 것
             live = set(await client.list_page_ids(space_key))
             async with AsyncSessionLocal() as db:
@@ -160,13 +166,54 @@ async def sync_spaces(spaces: List[str], mode: str) -> List[SyncRun]:
     return runs
 
 
+async def last_export_generated(space_key: str) -> Optional[datetime]:
+    """이 공간에 마지막으로 성공 적재한 내보내기의 생성 시각 (sync_runs.message 에 'generated=…' 로 남긴다)."""
+    from sqlalchemy import text as sqltext
+    async with AsyncSessionLocal() as db:
+        row = (await db.execute(sqltext(
+            "SELECT message FROM sync_runs WHERE space_key = :s AND mode = 'export' AND status = 'success' ORDER BY started_at DESC LIMIT 1"
+        ), {"s": space_key})).first()
+    if not row or not row[0]:
+        return None
+    m = re.search(r"generated=(\S+)", row[0])
+    try:
+        return datetime.fromisoformat(m.group(1)) if m else None
+    except ValueError:
+        return None
+
+
+async def sync_export(path: str, space_key: str, *, force: bool = False) -> SyncRun:
+    """브라우저로 받은 공간 내보내기(HTML) zip 을 적재한다. 이전에 적재한 것보다 오래된 zip 은 거부한다 (--force 로 무시)."""
+    await ensure_schema()
+    async with ExportZipClient(path, space_key) as client:
+        prev = await last_export_generated(space_key)
+        if client.generated_at and prev and client.generated_at < prev and not force:
+            raise SystemExit(f"[{space_key}] 이 zip 은 {client.generated_at:%Y-%m-%d %H:%M} 에 만든 것인데 이미 {prev:%Y-%m-%d %H:%M} 것이 적재돼 있습니다. "
+                             "최신 내보내기를 쓰거나 --force 를 주세요.")
+        gen = client.generated_at.isoformat() if client.generated_at else "unknown"
+        return await sync_space(client, space_key, "export", message=f"export file={os.path.basename(path)} generated={gen}")
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     ap = argparse.ArgumentParser(description="confluence-kb sync worker")
     ap.add_argument("--mode", choices=["full", "incremental"], default="incremental")
     ap.add_argument("--spaces", default="", help="쉼표 구분 공간 키 (기본: CONFLUENCE_SPACES)")
     ap.add_argument("--loop", action="store_true", help="SYNC_INCREMENTAL_MINUTES 간격으로 반복 실행")
+    ap.add_argument("--source", choices=["api", "export"], default="api", help="api: Confluence REST (기본) · export: 공간 내보내기(HTML) zip")
+    ap.add_argument("--file", default="", help="--source export 일 때 zip 파일(또는 풀어 둔 디렉터리) 경로")
+    ap.add_argument("--space", default="", help="--source export 일 때 공간 키 (zip 하나 = 공간 하나)")
+    ap.add_argument("--force", action="store_true", help="--source export 일 때 이전 적재보다 오래된 zip 도 적재")
     args = ap.parse_args()
+
+    if args.source == "export":
+        if not args.file or not args.space:
+            ap.error("--source export 에는 --file 과 --space 가 필요합니다")
+        if not os.path.exists(args.file):
+            ap.error(f"파일이 없습니다: {args.file}")
+        asyncio.run(sync_export(args.file, args.space.strip(), force=args.force))
+        return
+
     spaces = [s.strip() for s in args.spaces.split(",") if s.strip()] or settings.space_keys
     if not spaces:
         ap.error("수집 대상 공간이 없습니다 (--spaces 또는 CONFLUENCE_SPACES)")
