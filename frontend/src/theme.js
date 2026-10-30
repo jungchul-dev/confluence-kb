@@ -79,7 +79,7 @@ export const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         root: ({ theme: t }) => ({ fontSize: '0.875rem', borderColor: t.vars.palette.divider, padding: '8px 12px' }),
-        head: ({ theme: t }) => ({ fontSize: '0.75rem', fontWeight: 600, color: t.vars.palette.text.secondary, letterSpacing: '0.02em' }),
+        head: ({ theme: t }) => ({ fontSize: '0.875rem', fontWeight: 600, color: t.vars.palette.text.secondary }),
       },
     },
     MuiAlert: { styleOverrides: { root: { borderRadius: 8, fontSize: '0.875rem' } } },

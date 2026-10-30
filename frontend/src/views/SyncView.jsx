@@ -55,7 +55,7 @@ export default function SyncView() {
           <TableBody>
             {(status?.spaces || []).map((s) => (
               <TableRow key={s.space_key}>
-                <TableCell><code>{s.space_key}</code></TableCell><TableCell>{s.documents}</TableCell><TableCell>{s.pages}</TableCell><TableCell>{s.attachments ?? 0}</TableCell>
+                <TableCell>{s.space_key}</TableCell><TableCell>{s.documents}</TableCell><TableCell>{s.pages}</TableCell><TableCell>{s.attachments ?? 0}</TableCell>
                 <TableCell sx={{ color: s.errors ? 'error.main' : 'inherit' }}>{s.errors}</TableCell><TableCell>{fmt(s.last_synced_at)}</TableCell>
               </TableRow>
             ))}
@@ -71,9 +71,9 @@ export default function SyncView() {
           <TableBody>
             {(status?.runs || []).map((r) => (
               <TableRow key={r.id}>
-                <TableCell>{fmt(r.started_at)}</TableCell><TableCell><code>{r.space_key}</code></TableCell><TableCell>{r.mode}</TableCell>
+                <TableCell>{fmt(r.started_at)}</TableCell><TableCell>{r.space_key}</TableCell><TableCell>{(r.mode || '').toUpperCase()}</TableCell>
                 <TableCell sx={{ color: r.status === 'failed' ? 'error.main' : r.status === 'success' ? 'success.main' : 'inherit' }}>
-                  {r.status}{r.message && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.75rem', ml: 0.5, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }} title={r.message}>· {r.message}</Typography>}
+                  {(r.status || '').toUpperCase()}{r.status === 'failed' && r.message && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.75rem', ml: 0.5, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'bottom' }} title={r.message}>· {r.message}</Typography>}
                 </TableCell>
                 <TableCell>{r.pages_seen}</TableCell><TableCell>{r.pages_indexed}</TableCell><TableCell>{r.attachments_indexed}</TableCell><TableCell>{r.pages_deleted}</TableCell><TableCell sx={{ color: r.errors ? 'error.main' : 'inherit' }}>{r.errors}</TableCell>
               </TableRow>
@@ -90,7 +90,7 @@ export default function SyncView() {
             <TableHead><TableRow><TableCell>페이지 id</TableCell><TableCell>공간</TableCell><TableCell>버전</TableCell><TableCell>시각</TableCell><TableCell>오류</TableCell></TableRow></TableHead>
             <TableBody>
               {errors.map((e) => (
-                <TableRow key={e.page_id}><TableCell><code>{e.page_id}</code></TableCell><TableCell>{e.space_key}</TableCell><TableCell>{e.version}</TableCell><TableCell>{fmt(e.synced_at)}</TableCell><TableCell sx={{ color: 'error.main' }}>{e.error}</TableCell></TableRow>
+                <TableRow key={e.page_id}><TableCell>{e.page_id}</TableCell><TableCell>{e.space_key}</TableCell><TableCell>{e.version}</TableCell><TableCell>{fmt(e.synced_at)}</TableCell><TableCell sx={{ color: 'error.main' }}>{e.error}</TableCell></TableRow>
               ))}
             </TableBody>
           </Table>
