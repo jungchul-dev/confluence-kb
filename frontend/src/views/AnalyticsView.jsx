@@ -36,7 +36,7 @@ export default function AnalyticsView() {
     id: '',
     color: 'transparent',
     children: clusters.map((c, i) => ({
-      id: c.representative_docs[0] ? shortTitle(c.representative_docs[0].title) : `클러스터 ${c.cluster_id}`,
+      id: c.representative_docs[0] ? `${shortTitle(c.representative_docs[0].title)} (${c.doc_count}개)` : `클러스터 ${c.cluster_id} (${c.doc_count}개)`,
       value: c.doc_count,
       color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
       cluster: c,
