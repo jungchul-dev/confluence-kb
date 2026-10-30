@@ -30,6 +30,8 @@ class Candidate:
     kind: str
     file_name: Optional[str]
     updated_at: datetime
+    page_id: str = ""
+    attachment_id: Optional[str] = None
     vector_rank: Optional[int] = None
     keyword_rank: Optional[int] = None
     rrf_score: float = 0.0
@@ -39,7 +41,7 @@ class Candidate:
 
 _SELECT_COLS = """
     c.id AS chunk_id, c.document_id, c.ordinal, c.heading, c.content,
-    d.title, d.path, d.url, d.kind, d.file_name, d.updated_at
+    d.title, d.path, d.url, d.kind, d.file_name, d.updated_at, d.page_id, d.attachment_id
 """
 
 # 권한: 사용자 그룹과 교집합이 있거나 제한 없는 문서('*')
@@ -79,7 +81,7 @@ def _row_to_candidate(row) -> Candidate:
     return Candidate(
         chunk_id=row.chunk_id, document_id=row.document_id, ordinal=row.ordinal, heading=row.heading,
         content=row.content, title=row.title, path=row.path, url=row.url, kind=row.kind,
-        file_name=row.file_name, updated_at=row.updated_at,
+        file_name=row.file_name, updated_at=row.updated_at, page_id=row.page_id, attachment_id=row.attachment_id,
     )
 
 

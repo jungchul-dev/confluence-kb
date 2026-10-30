@@ -29,7 +29,7 @@ async def search(
         "passed": passed,
         "results": [
             {
-                "chunk_id": str(c.chunk_id), "document_id": str(c.document_id), "ordinal": c.ordinal,
+                "chunk_id": str(c.chunk_id), "document_id": str(c.document_id), "page_id": c.page_id, "attachment_id": c.attachment_id, "ordinal": c.ordinal,
                 "heading": c.heading, "content": c.content, "title": c.title, "path": c.path, "url": c.url,
                 "kind": c.kind, "file_name": c.file_name, "updated_at": c.updated_at.isoformat(),
                 "vector_rank": c.vector_rank, "keyword_rank": c.keyword_rank,

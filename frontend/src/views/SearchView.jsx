@@ -155,7 +155,7 @@ export default function SearchView() {
                             <KindChip kind={d.kind} />
                             <Link href={d.url} target="_blank" rel="noreferrer" noWrap sx={{ minWidth: 0 }}>{d.title}</Link>
                             <Typography color="text.secondary" sx={{ fontSize: '0.75rem', flexShrink: 0 }}>{d.space_key}</Typography>
-                            <Typography sx={{ ml: 'auto', fontFamily: MONO_FONT, fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}>{d.score.toFixed(3)}</Typography>
+                            <Tooltip title={`코사인 유사도 ${d.score.toFixed(3)}`}><Typography sx={{ ml: 'auto', fontFamily: MONO_FONT, fontSize: '0.75rem', color: 'text.secondary', flexShrink: 0 }}>유사도 {Math.round(d.score * 100)}%</Typography></Tooltip>
                           </Box>
                         ))
                         : <Typography sx={{ fontSize: '0.8125rem', color: 'text.disabled' }}>유사 문서가 없습니다.</Typography>

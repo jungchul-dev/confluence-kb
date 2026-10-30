@@ -27,8 +27,8 @@ export const health = () => request('/health')
 export const search = (q, k = 10) => request(`/search?q=${encodeURIComponent(q)}&k=${k}`)
 export const getDocument = (pageId, attachmentId) =>
   request(`/documents/${pageId}${attachmentId ? `?attachment_id=${attachmentId}` : ''}`)
-export const getRelated = (pageId, k = 5) =>
-  request(`/documents/${pageId}/related?k=${k}`)
+export const getRelated = (documentId, k = 5) =>
+  request(`/related-documents?document_id=${encodeURIComponent(documentId)}&k=${k}`)
 export const getClusters = (k = 0) =>
   request(`/admin/clusters${k > 0 ? `?k=${k}` : ''}`)
 export const syncStatus = () => request('/admin/sync/status')

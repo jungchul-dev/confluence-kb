@@ -22,20 +22,45 @@ router = APIRouter(tags=["analytics"])
 
 _PERM = "(d.allowed_groups && CAST(:groups AS text[]) OR '*' = ANY(d.allowed_groups))"
 
+# 유사 문서: 문서 임베딩(접두 없는 본문) 기준 코사인 유사도. 문서 임베딩이 없으면 청크 평균으로 대체한다.
+_DOC_VEC = "COALESCE(d.embedding, (SELECT AVG(c.embedding) FROM chunks c WHERE c.document_id = d.id))"
 _RELATED_SQL = text(f"""
-    WITH src AS (
-        SELECT AVG(c.embedding) AS emb
-        FROM chunks c JOIN documents d ON d.id = c.document_id
-        WHERE d.page_id = :page_id AND d.attachment_id IS NULL
-    )
+    WITH src AS (SELECT {_DOC_VEC} AS emb FROM documents d WHERE d.id = :doc_id)
     SELECT d.id, d.title, d.path, d.url, d.kind, d.space_key, d.updated_at,
-           MAX(1 - (c.embedding <=> (SELECT emb FROM src))) AS score
-    FROM chunks c JOIN documents d ON d.id = c.document_id
-    WHERE d.page_id != :page_id AND {_PERM}
-    GROUP BY d.id, d.title, d.path, d.url, d.kind, d.space_key, d.updated_at
+           1 - ({_DOC_VEC} <=> (SELECT emb FROM src)) AS score
+    FROM documents d
+    WHERE d.id != :doc_id AND (SELECT emb FROM src) IS NOT NULL AND {_PERM}
     ORDER BY score DESC
     LIMIT :k
 """)
+
+
+async def _related(db: AsyncSession, user: CurrentUser, doc_id: uuid.UUID, k: int) -> List[dict]:
+    if settings.skip_space_permissions or user.sees_everything:
+        sql = text(str(_RELATED_SQL).replace(_PERM, "TRUE"))
+        params = {"doc_id": doc_id, "k": k}
+    else:
+        sql = _RELATED_SQL
+        params = {"doc_id": doc_id, "k": k, "groups": user.groups}
+    rows = (await db.execute(sql, params)).fetchall()
+    return [
+        {
+            "document_id": str(r.id), "title": r.title, "path": r.path, "url": r.url, "kind": r.kind, "space_key": r.space_key,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None, "score": round(float(r.score or 0), 4),
+        }
+        for r in rows
+    ]
+
+
+@router.get("/related-documents")
+async def get_related_by_document_id(
+    document_id: uuid.UUID = Query(..., description="documents.id (검색 결과의 document_id)"),
+    k: int = Query(5, ge=1, le=20),
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """문서 id 기준 유사 문서 k개. 검색 화면이 쓴다."""
+    return {"document_id": str(document_id), "results": await _related(db, user, document_id, k)}
 
 
 @router.get("/documents/{page_id}/related")
@@ -46,27 +71,12 @@ async def get_related_documents(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """주어진 문서와 임베딩 유사도가 높은 다른 문서 k개를 돌려준다."""
-    if settings.skip_space_permissions or user.sees_everything:
-        sql = text(str(_RELATED_SQL).replace(_PERM, "TRUE"))
-        params = {"page_id": page_id, "k": k}
-    else:
-        sql = _RELATED_SQL
-        params = {"page_id": page_id, "k": k, "groups": user.groups}
-
-    rows = (await db.execute(sql, params)).fetchall()
-    return {
-        "page_id": page_id,
-        "results": [
-            {
-                "document_id": str(r.id), "title": r.title, "path": r.path,
-                "url": r.url, "kind": r.kind, "space_key": r.space_key,
-                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-                "score": round(float(r.score or 0), 4),
-            }
-            for r in rows
-        ],
-    }
+    """Confluence 페이지 id(+첨부 id) 기준 유사 문서 k개. 설계 문서의 원래 경로."""
+    stmt = text("SELECT id FROM documents WHERE page_id = :p AND attachment_id IS NOT DISTINCT FROM :a")
+    doc_id = (await db.execute(stmt, {"p": page_id, "a": attachment_id})).scalar()
+    if doc_id is None:
+        raise HTTPException(status_code=404, detail="색인된 문서가 없습니다.")
+    return {"page_id": page_id, "document_id": str(doc_id), "results": await _related(db, user, doc_id, k)}
 
 
 # 클러스터링 입력: 문서 임베딩(접두 없는 본문). 아직 없으면(마이그레이션 전) 청크 평균으로 대체한다.
