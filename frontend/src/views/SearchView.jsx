@@ -83,10 +83,6 @@ export default function SearchView() {
           </Collapse>
         </Card>
       ))}
-
-      {!loading && results.length === 0 && !error && (
-        <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>검색 결과가 여기에 표시됩니다. 행을 누르면 청크 본문과 유사 문서가 펼쳐집니다.</Box>
-      )}
     </Box>
   )
 }
