@@ -30,6 +30,7 @@ confluence-kb/
 │   │   ├── routers/
 │   │   │   ├── ask.py              # POST /ask, GET /ask/{id}
 │   │   │   ├── search.py           # GET /search (검색만, 디버그·열람용)
+│   │   │   ├── analytics.py        # GET /documents/{id}/related, GET /admin/clusters
 │   │   │   └── admin.py            # 동기화 상태·수동 실행
 │   │   ├── services/
 │   │   │   ├── retrieval.py        # 하이브리드 검색 + 권한 필터
@@ -141,8 +142,22 @@ queries (
 | POST | `/ask` | 질문 → `{ answer, sources[], found, query_id }` (스트리밍은 `?stream=true`) |
 | GET | `/search?q=` | 검색 결과만 (청크·점수·문서). 열람·디버그용 |
 | GET | `/documents/{page_id}` | 색인된 문서 메타와 청크 목록 |
+| GET | `/documents/{page_id}/related?k=5` | 임베딩 유사도 기반 유사 문서 추천 (검색 결과 펼침 시 표시) |
+| GET | `/admin/clusters?k=0` | 문서 임베딩 K-Means 클러스터링 (k=0 자동 선택, scikit-learn 필요) |
 | GET | `/admin/sync/status` | 공간별 마지막 동기화 시각·실패 건수 |
 | POST | `/admin/sync/run` | 공간 지정 수동 동기화 (관리자) |
+
+## 5.1 임베딩 활용 분석 (analytics)
+
+검색 외에 임베딩을 활용하는 두 가지 분석 기능을 제공한다.
+
+### 유사 문서 추천
+
+`GET /documents/{page_id}/related?k=5` — 주어진 문서의 청크 임베딩 평균을 구하고, 다른 문서의 청크 중 코사인 유사도가 가장 높은 상위 k개를 돌려준다. 검색 화면에서 결과를 펼치면 유사 문서가 함께 표시된다. 권한 필터는 검색과 동일하게 적용된다 (`SKIP_SPACE_PERMISSIONS=true` 면 무시).
+
+### 주제 클러스터링
+
+`GET /admin/clusters?k=0` — 문서별 평균 임베딩으로 K-Means 클러스터링을 수행해 주제 그룹을 나눈다. `k=0` 이면 `sqrt(문서수/2)` 로 자동 선택한다. 각 클러스터는 대표 문서(중심에 가장 가까운 5개)와 전체 문서 수를 반환한다. 분석 탭에서 클러스터별 문서 목록을 시각화한다. `scikit-learn` 이 필요하며 (`requirements-optional.txt`), 설치되지 않으면 503 응답을 돌려준다.
 
 ## 6. 설정
 
@@ -172,6 +187,7 @@ queries (
 | 1차 | 공간 1개, 본문만, 전체 동기화 야간 1회, 검색 + 답변 | 질문 20개를 던졌을 때 담당자가 "맞다"고 보는 답이 15개 이상 |
 | 2차 | 첨부파일(pdf·pptx·docx·xlsx), 증분 동기화, 권한 필터 | 제한 페이지가 권한 없는 사용자 검색에 나오지 않음 |
 | 3차 | 공간 확대, 원문 보강, 질의 로그 기반 개선 | 응답 5초 이내, 미발견 비율 추적 |
+| 4차 | 임베딩 활용 분석 — 유사 문서 추천, 주제 클러스터링 | 검색 결과에서 유사 문서 확인, 클러스터별 주제 파악 |
 
 ## 9. 처음부터 정해 두면 좋은 것
 
