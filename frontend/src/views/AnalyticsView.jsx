@@ -28,10 +28,10 @@ export default function AnalyticsView() {
   return (
     <Box>
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
-        <Typography color="text.secondary" sx={{ fontSize: '0.8125rem' }}>클러스터 수</Typography>
-        <TextField type="number" size="small" sx={{ width: 70 }} slotProps={{ htmlInput: { min: 0, max: 50 } }} value={k} onChange={(e) => setK(Number(e.target.value))} />
-        <Typography color="text.secondary" sx={{ fontSize: '0.75rem' }}>0 = 자동</Typography>
+        <Typography color="text.secondary">클러스터 수</Typography>
+        <TextField type="number" size="small" sx={{ width: 70 }} slotProps={{ htmlInput: { min: 0, max: 50 } }} value={k} onChange={(e) => setK(Number(e.target.value))} />        
         <Button variant="contained" size="small" onClick={load} disabled={loading}>{loading ? '분석 중…' : '분석'}</Button>
+        <Typography color="text.secondary">(0 = 자동)</Typography>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
