@@ -55,7 +55,7 @@ _VECTOR_SQL = text(f"""
 _KEYWORD_SQL = text(f"""
     SELECT {_SELECT_COLS}, ts_rank_cd(c.tsv, q) AS score
     FROM chunks c JOIN documents d ON d.id = c.document_id,
-         plainto_tsquery('simple', :q) q
+         websearch_to_tsquery('simple', :q) q
     WHERE c.tsv @@ q AND {_PERM}
     ORDER BY score DESC
     LIMIT :k
