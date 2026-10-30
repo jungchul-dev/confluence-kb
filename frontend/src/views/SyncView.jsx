@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { Box, Typography, Button, Card, Table, TableHead, TableBody, TableRow, TableCell, Alert } from '@mui/material'
 import * as api from '../api'
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString('ko-KR') : '-')
@@ -37,66 +38,63 @@ export default function SyncView() {
   }
 
   return (
-    <div className="sync">
-      <div className="toolbar">
-        <button className="btn" onClick={() => run('incremental')} disabled={busy || status?.running}>증분 동기화</button>
-        <button className="btn" onClick={() => run('full')} disabled={busy || status?.running}>전체 동기화</button>
-        {status?.running && <span className="muted">실행 중…</span>}
-        <button className="btn ghost" onClick={load}>새로고침</button>
-      </div>
-      {error && <div className="alert error">{error}</div>}
+    <Box>
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+        <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={() => run('incremental')} disabled={busy || status?.running}>증분 동기화</Button>
+        <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={() => run('full')} disabled={busy || status?.running}>전체 동기화</Button>
+        {status?.running && <Typography color="text.secondary">실행 중…</Typography>}
+        <Button variant="outlined" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={load}>새로고침</Button>
+      </Box>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <section className="panel">
-        <div className="panel-title">공간</div>
-        <table>
-          <thead><tr><th>공간</th><th>문서</th><th>페이지</th><th>오류</th><th>마지막 동기화</th></tr></thead>
-          <tbody>
+      <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>공간</Typography>
+        <Table size="small">
+          <TableHead><TableRow><TableCell>공간</TableCell><TableCell>문서</TableCell><TableCell>페이지</TableCell><TableCell>오류</TableCell><TableCell>마지막 동기화</TableCell></TableRow></TableHead>
+          <TableBody>
             {(status?.spaces || []).map((s) => (
-              <tr key={s.space_key}>
-                <td><code>{s.space_key}</code></td><td>{s.documents}</td><td>{s.pages}</td>
-                <td className={s.errors ? 'bad' : ''}>{s.errors}</td><td>{fmt(s.last_synced_at)}</td>
-              </tr>
+              <TableRow key={s.space_key}>
+                <TableCell><code>{s.space_key}</code></TableCell><TableCell>{s.documents}</TableCell><TableCell>{s.pages}</TableCell>
+                <TableCell sx={{ color: s.errors ? 'error.main' : 'inherit' }}>{s.errors}</TableCell><TableCell>{fmt(s.last_synced_at)}</TableCell>
+              </TableRow>
             ))}
-            {status && status.spaces.length === 0 && <tr><td colSpan={5} className="muted">CONFLUENCE_SPACES 가 비어 있습니다.</td></tr>}
-          </tbody>
-        </table>
-      </section>
+            {status && status.spaces.length === 0 && <TableRow><TableCell colSpan={5} align="center" color="text.secondary">CONFLUENCE_SPACES 가 비어 있습니다.</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Card>
 
-      <section className="panel">
-        <div className="panel-title">최근 실행</div>
-        <table>
-          <thead><tr><th>시작</th><th>공간</th><th>모드</th><th>상태</th><th>조회</th><th>색인</th><th>첨부</th><th>삭제</th><th>오류</th></tr></thead>
-          <tbody>
+      <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>최근 실행</Typography>
+        <Table size="small">
+          <TableHead><TableRow><TableCell>시작</TableCell><TableCell>공간</TableCell><TableCell>모드</TableCell><TableCell>상태</TableCell><TableCell>조회</TableCell><TableCell>색인</TableCell><TableCell>첨부</TableCell><TableCell>삭제</TableCell><TableCell>오류</TableCell></TableRow></TableHead>
+          <TableBody>
             {(status?.runs || []).map((r) => (
-              <tr key={r.id}>
-                <td>{fmt(r.started_at)}</td><td><code>{r.space_key}</code></td><td>{r.mode}</td>
-                <td className={r.status === 'failed' ? 'bad' : r.status === 'success' ? 'good' : ''}>
-                  <div className="sync-status">
-                    {r.status}
-                    {r.message && <span className="status-msg" title={r.message}>· {r.message}</span>}
-                  </div>
-                </td>
-                <td>{r.pages_seen}</td><td>{r.pages_indexed}</td><td>{r.attachments_indexed}</td><td>{r.pages_deleted}</td><td className={r.errors ? 'bad' : ''}>{r.errors}</td>
-              </tr>
+              <TableRow key={r.id}>
+                <TableCell>{fmt(r.started_at)}</TableCell><TableCell><code>{r.space_key}</code></TableCell><TableCell>{r.mode}</TableCell>
+                <TableCell sx={{ color: r.status === 'failed' ? 'error.main' : r.status === 'success' ? 'success.main' : 'inherit' }}>
+                  {r.status}{r.message && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.75rem', ml: 0.5, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }} title={r.message}>· {r.message}</Typography>}
+                </TableCell>
+                <TableCell>{r.pages_seen}</TableCell><TableCell>{r.pages_indexed}</TableCell><TableCell>{r.attachments_indexed}</TableCell><TableCell>{r.pages_deleted}</TableCell><TableCell sx={{ color: r.errors ? 'error.main' : 'inherit' }}>{r.errors}</TableCell>
+              </TableRow>
             ))}
-            {status && status.runs.length === 0 && <tr><td colSpan={9} className="muted">아직 실행 기록이 없습니다.</td></tr>}
-          </tbody>
-        </table>
-      </section>
+            {status && status.runs.length === 0 && <TableRow><TableCell colSpan={9} align="center" color="text.secondary">아직 실행 기록이 없습니다.</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Card>
 
       {errors.length > 0 && (
-        <section className="panel">
-          <div className="panel-title">페이지 오류 ({errors.length})</div>
-          <table>
-            <thead><tr><th>페이지 id</th><th>공간</th><th>버전</th><th>시각</th><th>오류</th></tr></thead>
-            <tbody>
+        <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>페이지 오류 ({errors.length})</Typography>
+          <Table size="small">
+            <TableHead><TableRow><TableCell>페이지 id</TableCell><TableCell>공간</TableCell><TableCell>버전</TableCell><TableCell>시각</TableCell><TableCell>오류</TableCell></TableRow></TableHead>
+            <TableBody>
               {errors.map((e) => (
-                <tr key={e.page_id}><td><code>{e.page_id}</code></td><td>{e.space_key}</td><td>{e.version}</td><td>{fmt(e.synced_at)}</td><td className="bad">{e.error}</td></tr>
+                <TableRow key={e.page_id}><TableCell><code>{e.page_id}</code></TableCell><TableCell>{e.space_key}</TableCell><TableCell>{e.version}</TableCell><TableCell>{fmt(e.synced_at)}</TableCell><TableCell sx={{ color: 'error.main' }}>{e.error}</TableCell></TableRow>
               ))}
-            </tbody>
-          </table>
-        </section>
+            </TableBody>
+          </Table>
+        </Card>
       )}
-    </div>
+    </Box>
   )
 }
