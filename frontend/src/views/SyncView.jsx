@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Box, Typography, Button, Card, Table, TableHead, TableBody, TableRow, TableCell, Alert } from '@mui/material'
+import { Box, Typography, Button, Card, Table, TableHead, TableBody, TableRow, TableCell, Alert, IconButton } from '@mui/material'
+import { Refresh } from '@mui/icons-material'
 import * as api from '../api'
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString('ko-KR') : '-')
@@ -43,7 +44,7 @@ export default function SyncView() {
         <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={() => run('incremental')} disabled={busy || status?.running}>증분 동기화</Button>
         <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={() => run('full')} disabled={busy || status?.running}>전체 동기화</Button>
         {status?.running && <Typography color="text.secondary">실행 중…</Typography>}
-        <Button variant="outlined" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={load}>새로고침</Button>
+        <IconButton size="small" onClick={load} aria-label="새로고침"><Refresh fontSize="small" /></IconButton>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
