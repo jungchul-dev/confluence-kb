@@ -5,6 +5,10 @@ import remarkGfm from 'remark-gfm'
 import * as api from '../api'
 import SourceList from '../components/SourceList'
 
+const Placeholder = ({ children }) => (
+  <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', fontSize: '0.875rem', textAlign: 'center', px: 2 }}>{children}</Box>
+)
+
 export default function AskView() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
@@ -36,11 +40,14 @@ export default function AskView() {
     }
   }
 
+  const hasSources = meta?.sources?.length > 0
+
   return (
-    <Box>
-      <Box component="form" sx={{ display: 'flex', gap: 1, alignItems: 'flex-end', mb: 2 }} onSubmit={submit}>
+    // 위: 질문 입력(고정) / 아래: 답변(왼쪽)·출처(오른쪽) 두 칸이 남은 높이를 모두 쓰고 각자 안에서 스크롤된다
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <Box component="form" sx={{ display: 'flex', gap: 1, alignItems: 'flex-end', mb: 2, flexShrink: 0 }} onSubmit={submit}>
         <TextField
-          multiline fullWidth minRows={5}
+          multiline fullWidth minRows={4}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) submit(e) }}
@@ -52,30 +59,40 @@ export default function AskView() {
           : <Button type="submit" variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} disabled={!question.trim()}>질문</Button>}
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>{error}</Alert>}
 
-      {(answer || running) && (
-        <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 2 }}>
+        {/* 답변 */}
+        <Card variant="outlined" sx={{ p: 2, flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <Typography variant="h6" sx={{ mb: 1, flexShrink: 0 }}>
             답변
             {running && <Typography component="span" color="text.secondary"> · 생성 중…</Typography>}
             {done && <Typography component="span" color="text.secondary"> · {(done.latency_ms / 1000).toFixed(1)}s</Typography>}
           </Typography>
-          <Box sx={{ lineHeight: 1.6, color: meta?.found === false ? 'text.secondary' : 'text.primary' }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer || ' '}</ReactMarkdown>
-          </Box>
+          {(answer || running)
+            ? (
+              <Box sx={{ flex: 1, lineHeight: 1.6, overflow: 'auto', minHeight: 0, pr: 1, color: meta?.found === false ? 'text.secondary' : 'text.primary' }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer || ' '}</ReactMarkdown>
+              </Box>
+            )
+            : <Placeholder>질문을 입력하면 답변이 여기에 표시됩니다.</Placeholder>}
         </Card>
-      )}
 
-      {meta?.sources?.length > 0 && (
-        <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            {meta.found === false ? '비슷한 문서' : '출처'}
-            {meta.top_score != null && <Typography component="span" color="text.secondary"> · 최고 점수 {meta.top_score.toFixed(2)}</Typography>}
+        {/* 출처 */}
+        <Card variant="outlined" sx={{ p: 2, flex: 2, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <Typography variant="h6" sx={{ mb: 1, flexShrink: 0 }}>
+            {meta?.found === false ? '비슷한 문서' : '출처'}
+            {meta?.top_score != null && <Typography component="span" color="text.secondary"> · 최고 점수 {meta.top_score.toFixed(2)}</Typography>}
           </Typography>
-          <SourceList sources={meta.sources} />
+          {hasSources
+            ? (
+              <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, pr: 1 }}>
+                <SourceList sources={meta.sources} />
+              </Box>
+            )
+            : <Placeholder>{running ? '출처를 찾는 중…' : '답변에 사용된 문서가 여기에 표시됩니다.'}</Placeholder>}
         </Card>
-      )}
+      </Box>
     </Box>
   )
 }
