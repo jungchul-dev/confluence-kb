@@ -9,8 +9,8 @@ const CLUSTER_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ea580c', '
   '#4f46e5', '#059669', '#db2777', '#7c3aed', '#0d9488', '#c2410c', '#4338ca', '#0284c7']
 
 const PAGE_SIZE = 20
-// 차트와 오른쪽 목록의 높이: 브라우저 높이에서 상단 헤더·툴바·여백(약 190px)을 뺀 값. 창 높이를 줄이면 같이 줄어든다
-const PANEL_HEIGHT = 'calc(100vh - 190px)'
+// 차트와 오른쪽 목록의 높이: 브라우저 높이에서 상단 헤더·툴바·여백(약 214px)을 뺀 값. 창 높이를 줄이면 같이 줄어든다
+const PANEL_HEIGHT = 'calc(100vh - 214px)'  // 헤더 56 + 상하 여백 64 + 툴바·요약 줄 ≈ 214
 const PANEL_MIN_HEIGHT = 420
 
 // 대표 문서 제목에서 첨부 파일명(" — 파일명")을 떼고 경로 구분자를 보기 좋게 바꾼다. 잘라내지는 않는다.
@@ -162,7 +162,10 @@ export default function AnalyticsView() {
         <TextField type="number" size="small" sx={{ width: 70 }} slotProps={{ htmlInput: { min: 0, max: 50 } }} value={k} onChange={(e) => setK(Number(e.target.value))} />
         <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={load} disabled={loading}>{loading ? '분석 중…' : '분석'}</Button>
         <Tooltip arrow title="0 이면 2~20 범위에서 실루엣 점수가 가장 높은 개수를 자동으로 고릅니다. 숫자를 넣으면 그 개수로 나눕니다.">
-          <Typography color="text.secondary" sx={{ cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>(0 = 자동)</Typography>
+          <Typography color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>
+            (0 = 자동)
+            <HelpIcon sx={{ fontSize: 15 }} />
+          </Typography>
         </Tooltip>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
