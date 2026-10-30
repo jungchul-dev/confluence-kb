@@ -78,8 +78,8 @@ async def hybrid_search(
     qvec = await embed_query(question)
     vec_param = "[" + ",".join(f"{v:.7f}" for v in qvec) + "]"
 
-    if user.sees_everything:
-        # 관리자·개발 모드: 권한 조건을 빼고 전체를 검색한다
+    if user.sees_everything or settings.skip_space_permissions:
+        # 관리자·개발 모드 또는 권한 체크 비활성화: 권한 조건을 빼고 전체를 검색한다
         vector_sql = text(str(_VECTOR_SQL).replace(_PERM, "TRUE"))
         keyword_sql = text(str(_KEYWORD_SQL).replace(_PERM, "TRUE"))
         params_v = {"qvec": vec_param, "k": k}
