@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.models import Chunk, Document
 from app.db.session import get_db
 from app.permissions import CurrentUser, get_current_user
@@ -51,7 +52,7 @@ async def get_document(
     doc = (await db.execute(stmt)).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=404, detail="색인된 문서가 없습니다.")
-    if not user.sees_everything and "*" not in doc.allowed_groups and not set(doc.allowed_groups) & set(user.groups):
+    if not settings.skip_space_permissions and not user.sees_everything and "*" not in doc.allowed_groups and not set(doc.allowed_groups) & set(user.groups):
         raise HTTPException(status_code=403, detail="열람 권한이 없습니다.")
     chunks = (await db.execute(select(Chunk).where(Chunk.document_id == doc.id).order_by(Chunk.ordinal))).scalars().all()
     return {
