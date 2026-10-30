@@ -35,9 +35,10 @@ export const syncStatus = () => request('/admin/sync/status')
 export const syncErrors = () => request('/admin/sync/errors')
 export const runSync = (mode, spaces) => request('/admin/sync/run', { method: 'POST', body: { mode, spaces: spaces || null } })
 
-// 질문 — SSE 스트리밍. onMeta(출처), onDelta(답변 조각), 완료 시 { query_id, latency_ms } 를 돌려준다.
-export const ask = async (question, { onMeta, onDelta, signal } = {}) => {
-  const res = await fetch(`${BASE}/ask?stream=true`, { method: 'POST', headers: headers(), body: JSON.stringify({ question }), signal })
+// 질문 — SSE 스트리밍. history 는 이전 대화 [{ role: 'user'|'assistant', content }] (서버가 ASK_HISTORY_TURNS 턴으로 자른다).
+// onMeta(출처·검색 문장), onDelta(답변 조각), 완료 시 { query_id, latency_ms } 를 돌려준다.
+export const ask = async (question, { history = [], onMeta, onDelta, signal } = {}) => {
+  const res = await fetch(`${BASE}/ask?stream=true`, { method: 'POST', headers: headers(), body: JSON.stringify({ question, history }), signal })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || `${res.status} ${res.statusText}`)

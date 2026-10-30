@@ -134,6 +134,7 @@ queries (
 `POST /ask { question }` 한 번에 아래가 순서대로 돈다. 목표 응답 시간은 5초 안.
 
 1. **사용자 식별** — SSO 헤더(`X-User-Id`, `X-User-Groups`)에서 사용자 id 와 그룹을 얻는다. 개발 중에는 `DEV_USER_GROUPS` 를 쓴다.
+1-1. **이어지는 질문 처리** — 요청의 `history`(이전 질문·답변)를 최근 `ASK_HISTORY_TURNS`(기본 5) 턴으로 자른다. 이력이 있으면 LLM 에게 마지막 질문을 "대화 없이도 뜻이 통하는 검색용 한 문장"으로 바꾸게 해(`search_query`, 예: "그건 얼마나 걸려?" → "운영 배포 승인에 얼마나 걸리나요?") 검색·리랭킹에 쓰고, 답변 프롬프트에는 이력 턴과 원문 질문을 넣는다. 재작성이 실패하면 원문으로 검색한다.
 2. **하이브리드 검색** — 질문 임베딩으로 pgvector 코사인 상위 50 + `tsv @@ websearch_to_tsquery('korean')` 상위 50 을 받아 RRF(reciprocal rank fusion, 1/(60+순위))로 합치고 상위 50 후보를 남긴다. 키워드 쪽은 단어를 AND 로 묶어 찾고, 0건이면 OR 로 다시 찾는다(자연어 질문은 단어가 많아 AND 가 자주 비기 때문). 두 쿼리 모두 권한 필터를 포함한다. 코드명·사람 이름·약어 질문은 키워드 쪽이 잡아 준다. 벡터 검색은 항상 50개를 채우므로 후보는 사실상 항상 존재한다.
 3. **리랭킹** — 합친 후보(최대 50)를 cross-encoder(`RERANK_PROVIDER=local` 또는 TEI 서버 `http`)로 질문 대비 채점해 상위 5 를 고른다. **1위 점수**가 하한(`RERANK_MIN_SCORE`, 초기값 0.3) 미만이면 생성 단계를 건너뛰고 "관련 문서를 찾지 못했다" 와 가장 가까운 후보 링크만 돌려준다. 1위가 하한을 넘으면 2위 이하는 점수와 상관없이 상위 5 전부가 맥락에 들어간다. `RERANK_PROVIDER=none` 이면 RRF 순서를 그대로 쓰고 하한 판정을 하지 않는다(후보가 있으면 항상 답한다).
 4. **맥락 구성** — 같은 문서의 청크는 순서대로 붙이고, 문서별로 제목·경로·URL·수정일 헤더를 단다. 총 길이는 모델 한도의 60% 안으로 자른다. (선택) 상위 1개 문서는 MCP 나 REST 로 본문 전체를 받아 헤더 아래 섹션을 보강한다.
@@ -144,7 +145,7 @@ queries (
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| POST | `/ask` | 질문 → `{ answer, sources[], found, query_id }` (스트리밍은 `?stream=true`) |
+| POST | `/ask` | `{ question, history[] }` → `{ answer, sources[], found, search_query, query_id }` (스트리밍은 `?stream=true`, meta 이벤트에 `search_query` 포함). 질문 탭은 대화 목록으로 보여주고 답변을 누르면 그 턴의 출처가 표시된다 |
 | GET | `/search?q=&k=20` | 검색 결과만 (청크 · 벡터/키워드 순위 · RRF/리랭커 점수 · passed 플래그). k 최대 50. 열람·디버그용 |
 | GET | `/documents/{page_id}` | 색인된 문서 메타와 청크 목록 |
 | GET | `/related-documents?document_id=&k=5` | 문서 임베딩 코사인 유사도 기반 유사 문서 (검색 화면 상세 칸). `/documents/{page_id}/related` 는 페이지 id 로 같은 결과 |

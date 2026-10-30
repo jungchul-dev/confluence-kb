@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
     llm_max_context_tokens: int = 12000  # 맥락에 넣을 청크 총량 상한(토큰 근사치)
+    ask_history_turns: int = 5  # 질문 탭에서 LLM 에 함께 넘기는 이전 대화 턴 수 (질문+답변 = 1턴). 0 이면 단발 질의
 
     rerank_provider: str = "none"  # none | local | http
     rerank_model: str = "BAAI/bge-reranker-v2-m3"

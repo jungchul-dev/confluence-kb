@@ -23,8 +23,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ask", tags=["ask"])
 
 
+class HistoryTurn(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str = Field("", max_length=20000)
+
+
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
+    history: List[HistoryTurn] = Field(default_factory=list, description="이전 대화 (오래된 것부터). 서버가 ASK_HISTORY_TURNS 턴으로 자른다")
 
 
 class SourceOut(BaseModel):
@@ -43,6 +49,7 @@ class SourceOut(BaseModel):
 class AskResponse(BaseModel):
     query_id: str
     found: bool
+    search_query: str  # 실제 검색에 쓴 문장 (이어지는 질문이면 이전 대화를 반영해 재작성한 것)
     answer: str
     sources: List[SourceOut]
     top_score: Optional[float] = None
@@ -58,9 +65,9 @@ async def _log_query(user: CurrentUser, question: str, chunk_ids: List[uuid.UUID
         return row.id
 
 
-async def _retrieve(db: AsyncSession, question: str, user: CurrentUser):
-    candidates = await hybrid_search(db, question, user)
-    top, passed = await rerank(question, candidates)
+async def _retrieve(db: AsyncSession, search_query: str, user: CurrentUser):
+    candidates = await hybrid_search(db, search_query, user)
+    top, passed = await rerank(search_query, candidates)
     docs, context = build_context(top)
     top_score = top[0].rerank_score if top else None
     return top, passed, docs, context, top_score
@@ -75,8 +82,11 @@ async def ask(
 ):
     started = monotonic()
     question = payload.question.strip()
+    history = [h.model_dump() for h in payload.history]
+    # 이어지는 질문("그건 누가 승인해?")은 이전 대화를 반영한 독립 문장으로 바꿔 검색한다. 답변 프롬프트에는 원문 질문을 쓴다
+    search_query = await answer_svc.rewrite_query(question, history) if history else question
     try:
-        top, passed, docs, context, top_score = await _retrieve(db, question, user)
+        top, passed, docs, context, top_score = await _retrieve(db, search_query, user)
     except Exception as e:  # noqa: BLE001
         logger.error("retrieval failed: %s", e, exc_info=True)
         raise HTTPException(status_code=502, detail=f"검색 단계 실패: {e}")
@@ -86,7 +96,7 @@ async def ask(
 
     if not passed or not docs:
         query_id = await _log_query(user, question, chunk_ids, top_score, False, started)
-        body = AskResponse(query_id=str(query_id), found=False, answer=answer_svc.NOT_FOUND_MESSAGE,
+        body = AskResponse(query_id=str(query_id), found=False, search_query=search_query, answer=answer_svc.NOT_FOUND_MESSAGE,
                            sources=sources, top_score=top_score, latency_ms=int((monotonic() - started) * 1000))
         if not stream:
             return body
@@ -97,20 +107,20 @@ async def ask(
 
     if not stream:
         try:
-            text = await answer_svc.generate_answer(question, context)
+            text = await answer_svc.generate_answer(question, context, history)
         except Exception as e:  # noqa: BLE001
             logger.error("answer generation failed: %s", e, exc_info=True)
             raise HTTPException(status_code=502, detail=f"답변 생성 실패: {e}")
         query_id = await _log_query(user, question, chunk_ids, top_score, True, started)
-        return AskResponse(query_id=str(query_id), found=True, answer=text, sources=sources, top_score=top_score,
+        return AskResponse(query_id=str(query_id), found=True, search_query=search_query, answer=text, sources=sources, top_score=top_score,
                            latency_ms=int((monotonic() - started) * 1000))
 
     async def gen():
         # 먼저 출처(meta)를 보내 UI 가 답변 조각을 받는 동안 출처를 그릴 수 있게 한다
-        meta = {"found": True, "sources": sources, "top_score": top_score}
+        meta = {"found": True, "sources": sources, "top_score": top_score, "search_query": search_query}
         yield f"event: meta\ndata: {json.dumps(meta, ensure_ascii=False)}\n\n"
         try:
-            async for delta in answer_svc.stream_answer(question, context):
+            async for delta in answer_svc.stream_answer(question, context, history):
                 yield f"event: delta\ndata: {json.dumps(delta, ensure_ascii=False)}\n\n"
             query_id = await _log_query(user, question, chunk_ids, top_score, True, started)
             yield f"event: done\ndata: {json.dumps({'query_id': str(query_id), 'latency_ms': int((monotonic() - started) * 1000)})}\n\n"
