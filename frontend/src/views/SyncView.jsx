@@ -70,7 +70,12 @@ export default function SyncView() {
             {(status?.runs || []).map((r) => (
               <tr key={r.id}>
                 <td>{fmt(r.started_at)}</td><td><code>{r.space_key}</code></td><td>{r.mode}</td>
-                <td className={r.status === 'failed' ? 'bad' : r.status === 'success' ? 'good' : ''}>{r.status}{r.message ? ` · ${r.message}` : ''}</td>
+                <td className={r.status === 'failed' ? 'bad' : r.status === 'success' ? 'good' : ''}>
+                  <div className="sync-status">
+                    {r.status}
+                    {r.message && <span className="status-msg" title={r.message}>· {r.message}</span>}
+                  </div>
+                </td>
                 <td>{r.pages_seen}</td><td>{r.pages_indexed}</td><td>{r.attachments_indexed}</td><td>{r.pages_deleted}</td><td className={r.errors ? 'bad' : ''}>{r.errors}</td>
               </tr>
             ))}
