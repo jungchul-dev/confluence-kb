@@ -27,12 +27,16 @@ export default function AnalyticsView() {
     }
   }, [k])
 
-  useEffect(() => { load() }, [])
+  const shortTitle = (title) => {
+    const stripped = title.replace(/\s*—\s*.*$/, '').replace(/\s*>\s*/g, ' › ')
+    return stripped.length > 20 ? stripped.slice(0, 20) + '…' : stripped
+  }
 
   const bubbleData = {
-    id: 'root',
+    id: '전체',
+    color: '#f4f4f5',
     children: clusters.map((c, i) => ({
-      id: `클러스터 ${c.cluster_id}`,
+      id: c.representative_docs[0] ? shortTitle(c.representative_docs[0].title) : `클러스터 ${c.cluster_id}`,
       value: c.doc_count,
       color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
       cluster: c,
@@ -44,8 +48,8 @@ export default function AnalyticsView() {
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
         <Typography color="text.secondary">클러스터 수</Typography>
         <TextField type="number" size="small" sx={{ width: 70 }} slotProps={{ htmlInput: { min: 0, max: 50 } }} value={k} onChange={(e) => setK(Number(e.target.value))} />
-        <Typography color="text.secondary">0 = 자동</Typography>
         <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={load} disabled={loading}>{loading ? '분석 중…' : '분석'}</Button>
+        <Typography color="text.secondary">(0 = 자동)</Typography>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -58,13 +62,21 @@ export default function AnalyticsView() {
             <ResponsiveCirclePacking
               data={bubbleData}
               margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-              padding={4}
-              colors={({ data }) => data.color || '#ccc'}
+              padding={10}
+              colors={({ data }) => data.color || '#e4e4e7'}
               colorBy="id"
               enableLabels
               label={({ data }) => data.id}
-              labelTextColor={{ from: 'color', modifiers: [['darker', 2]] }}
-              labelSkipRadius={20}
+              labelTextColor={({ data }) => {
+                const hex = data.color || '#e4e4e7'
+                const r = parseInt(hex.slice(1, 3), 16)
+                const g = parseInt(hex.slice(3, 5), 16)
+                const b = parseInt(hex.slice(5, 7), 16)
+                const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+                return luminance > 0.55 ? '#18181b' : '#ffffff'
+              }}
+              labelSkipRadius={12}
+              fontSize={14}
               borderWidth={2}
               borderColor={{ from: 'color', modifiers: [['darker', 0.3]] }}
               onClick={(node) => {
