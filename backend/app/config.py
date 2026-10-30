@@ -37,8 +37,10 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     llm_max_context_tokens: int = 12000  # 맥락에 넣을 청크 총량 상한(토큰 근사치)
 
-    rerank_provider: str = "none"  # none | local
+    rerank_provider: str = "none"  # none | local | http
     rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    rerank_api_url: str = ""  # http 선택 시 TEI 서버 베이스 URL, 예: http://rerank:8080
+    rerank_api_key: str = ""  # 인증이 필요한 서버만
     rerank_min_score: float = 0.3
     top_k_candidates: int = 50
     top_k_final: int = 5
