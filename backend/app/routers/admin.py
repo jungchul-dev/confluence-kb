@@ -39,10 +39,11 @@ async def sync_status(user: CurrentUser = Depends(get_current_user), db: AsyncSe
     spaces = []
     for key in settings.space_keys:
         docs = (await db.execute(select(func.count()).select_from(Document).where(Document.space_key == key))).scalar_one()
-        pages = (await db.execute(select(func.count()).select_from(SyncState).where(SyncState.space_key == key))).scalar_one()
+        pages = (await db.execute(select(func.count()).select_from(Document).where(Document.space_key == key, Document.kind == "page"))).scalar_one()
+        attachments = (await db.execute(select(func.count()).select_from(Document).where(Document.space_key == key, Document.kind == "attachment"))).scalar_one()
         errors = (await db.execute(select(func.count()).select_from(SyncState).where(SyncState.space_key == key, SyncState.error.isnot(None)))).scalar_one()
         last = (await db.execute(select(func.max(SyncState.synced_at)).where(SyncState.space_key == key))).scalar_one()
-        spaces.append({"space_key": key, "documents": docs, "pages": pages, "errors": errors, "last_synced_at": last.isoformat() if last else None})
+        spaces.append({"space_key": key, "documents": docs, "pages": pages, "attachments": attachments, "errors": errors, "last_synced_at": last.isoformat() if last else None})
     runs = (await db.execute(select(SyncRun).order_by(SyncRun.started_at.desc()).limit(20))).scalars().all()
     return {"spaces": spaces, "runs": [_run_dict(r) for r in runs], "running": _running_lock.locked()}
 
