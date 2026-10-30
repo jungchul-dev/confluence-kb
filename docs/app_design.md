@@ -84,6 +84,7 @@ documents (
   content_hash  text not null,
   updated_at    timestamptz not null,     -- Confluence 수정일
   allowed_groups text[] not null,         -- 열람 가능 그룹
+  embedding     vector(1536),             -- 클러스터링용 문서 임베딩 (제목 + 접두 뺀 본문), hnsw 인덱스
   unique (page_id, attachment_id)
 )
 
@@ -158,7 +159,7 @@ queries (
 
 ### 주제 클러스터링
 
-`GET /admin/clusters?k=0` — 문서별 평균 임베딩으로 K-Means 클러스터링을 수행해 주제 그룹을 나눈다. `k=0` 이면 `sqrt(문서수/2)` 로 자동 선택한다. 각 클러스터는 대표 문서(중심에 가장 가까운 5개)와 전체 문서 수를 반환한다. 분석 탭에서 클러스터별 문서 목록을 시각화한다. `scikit-learn` 이 필요하며 (`requirements-optional.txt`), 설치되지 않으면 503 응답을 돌려준다.
+`GET /admin/clusters?k=0` — 문서 임베딩(`documents.embedding`: 제목 + 경로 접두를 뺀 본문 앞부분)을 길이 정규화한 뒤 K-Means(코사인 기준)로 클러스터링한다. 청크 임베딩 평균을 쓰면 경로 접두 때문에 프로젝트·공간별로 뭉치므로 쓰지 않는다 (문서 임베딩이 없으면 대체). `k=0` 이면 2~min(20, n/5) 범위에서 실루엣 점수가 가장 높은 k 를 고른다. 각 클러스터는 본문 TF-IDF 키워드(`keywords`, `label`), 대표 문서(중심에 가장 가까운 5개), 전체 문서 목록을 반환한다. 분석 탭에서 클러스터별 문서 목록을 시각화한다. `scikit-learn` 이 필요하며 (`requirements-optional.txt`), 설치되지 않으면 503 응답을 돌려준다.
 
 ## 6. 설정
 

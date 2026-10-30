@@ -100,6 +100,7 @@ const ClusterTooltip = (node) => {
       <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: node.data.color, marginRight: 6, verticalAlign: 'middle' }} />
       <strong>{cleanTitle(node.data.title)}</strong>
       <span style={{ color: '#71717a', marginLeft: 6 }}>{node.data.count}개 문서</span>
+      {node.data.repTitle && <div style={{ color: '#71717a', marginTop: 4, fontSize: 12 }}>대표 문서: {cleanTitle(node.data.repTitle)}</div>}
     </div>
   )
 }
@@ -107,6 +108,7 @@ const ClusterTooltip = (node) => {
 export default function AnalyticsView() {
   const [clusters, setClusters] = useState([])
   const [totalDocs, setTotalDocs] = useState(0)
+  const [info, setInfo] = useState(null) // { silhouette, docs_without_embedding, k_candidates }
   const [k, setK] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -120,6 +122,7 @@ export default function AnalyticsView() {
     try {
       const data = await api.getClusters(k)
       setClusters(data.clusters); setTotalDocs(data.total_documents); setK(data.k)
+      setInfo({ silhouette: data.silhouette, docs_without_embedding: data.docs_without_embedding, k_candidates: data.k_candidates || [] })
       setSelected(null)
     } catch (err) {
       setError(err.message)
@@ -135,7 +138,8 @@ export default function AnalyticsView() {
       const color = CLUSTER_COLORS[i % CLUSTER_COLORS.length]
       return {
         id: `cluster-${c.cluster_id}`,
-        title: c.representative_docs[0] ? c.representative_docs[0].title : `클러스터 ${c.cluster_id}`,
+        title: c.label || (c.representative_docs[0] ? c.representative_docs[0].title : `클러스터 ${c.cluster_id}`),
+        repTitle: c.representative_docs[0] ? c.representative_docs[0].title : '',
         count: c.doc_count,
         value: c.doc_count,
         color,
@@ -160,7 +164,11 @@ export default function AnalyticsView() {
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Typography color="text.secondary" sx={{ mb: 2 }}>전체 문서 {totalDocs}개 · 클러스터 {clusters.length}개</Typography>
+      <Typography color="text.secondary" sx={{ mb: 2 }}>
+        전체 문서 {totalDocs}개 · 클러스터 {clusters.length}개
+        {info?.silhouette != null && ` · 실루엣 ${info.silhouette.toFixed(3)}`}
+        {info?.docs_without_embedding > 0 && ` · 문서 임베딩 없음 ${info.docs_without_embedding}개 (청크 평균으로 대체)`}
+      </Typography>
 
       {clusters.length > 0 && (
         <Box sx={{ display: 'flex', gap: 2 }}>
@@ -191,10 +199,16 @@ export default function AnalyticsView() {
           {selected && (
             <Card variant="outlined" sx={{ p: 2, width: '48%', minWidth: 560, maxWidth: 900, flexShrink: 0, height: PANEL_HEIGHT, minHeight: PANEL_MIN_HEIGHT, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
-                <Chip size="small" label={cleanTitle(selected.representative_docs[0] ? selected.representative_docs[0].title : `클러스터 ${selected.cluster_id}`)} sx={{ backgroundColor: selectedColor, color: '#fff', fontWeight: 600, maxWidth: '100%' }} />
+                <Chip size="small" label={selected.label || `클러스터 ${selected.cluster_id}`} sx={{ backgroundColor: selectedColor, color: '#fff', fontWeight: 600, maxWidth: '100%' }} />
                 <Typography color="text.secondary">{selected.doc_count}개 문서</Typography>
                 {pageCount > 1 && <Typography color="text.secondary" sx={{ ml: 'auto', fontSize: '0.8125rem' }}>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, selectedDocs.length)} / {selectedDocs.length}</Typography>}
               </Box>
+              {selected.keywords?.length > 0 && (
+                <Typography color="text.secondary" sx={{ fontSize: '0.8125rem', mb: 1 }}>
+                  {selected.label_source === 'keywords' && <>(LLM 제목 실패, 키워드 제목 사용) · </>}키워드: {selected.keywords.join(', ')}
+                  {selected.representative_docs[0] && <> · 대표 문서: {cleanTitle(selected.representative_docs[0].title)}</>}
+                </Typography>
+              )}
               <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                 {pageDocs.map((d) => (
                   <Box key={d.document_id} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, py: 0.75, borderTop: 1, borderColor: 'divider', fontSize: '0.8125rem', '&:first-of-type': { borderTop: 0 } }}>

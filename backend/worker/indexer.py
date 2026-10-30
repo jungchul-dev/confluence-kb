@@ -4,17 +4,28 @@
 """
 import hashlib
 import logging
+import re
 from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Chunk, Document, SyncState
+from app.db.models import DOC_EMBED_CHARS, Chunk, Document, SyncState
 from app.services.embeddings import embed_texts
 from worker.chunker import ChunkDraft
 
 logger = logging.getLogger(__name__)
+
+
+_PREFIX_LINE = re.compile(r"^\[[^\n]*\]\n?")
+
+
+def document_embedding_text(title: str, chunk_contents: List[str]) -> str:
+    """클러스터링용 문서 텍스트 — 제목 + 각 청크의 경로 접두 줄을 뺀 본문을 이어 붙여 앞 DOC_EMBED_CHARS 자."""
+    body = "\n".join(_PREFIX_LINE.sub("", c).strip() for c in chunk_contents)
+    body = re.sub(r"\n{2,}", "\n", body)
+    return f"{title}\n{body[:DOC_EMBED_CHARS]}"
 
 
 def content_hash(*parts: str) -> str:
@@ -40,18 +51,21 @@ async def upsert_document(
             await db.delete(doc)
         return 0
 
-    vectors = await embed_texts([d.content for d in drafts])
+    # 청크 임베딩 + 마지막 1개는 문서 임베딩(접두 없는 본문) — 한 번의 배치 호출로 처리한다
+    vectors = await embed_texts([d.content for d in drafts] + [document_embedding_text(title, [d.content for d in drafts])])
+    doc_vector = vectors.pop()
 
     if doc is None:
         doc = Document(space_key=space_key, page_id=page_id, attachment_id=attachment_id, title=title, path=path, url=url,
                        kind=kind, file_name=file_name, version=version, content_hash=c_hash, updated_at=updated_at,
-                       allowed_groups=allowed_groups)
+                       allowed_groups=allowed_groups, embedding=doc_vector)
         db.add(doc)
         await db.flush()
     else:
         doc.space_key, doc.title, doc.path, doc.url, doc.kind, doc.file_name = space_key, title, path, url, kind, file_name
         doc.version, doc.content_hash, doc.updated_at, doc.allowed_groups = version, c_hash, updated_at, allowed_groups
         doc.indexed_at = datetime.now(updated_at.tzinfo)
+        doc.embedding = doc_vector
         await db.execute(delete(Chunk).where(Chunk.document_id == doc.id))
 
     for d, vec in zip(drafts, vectors):

@@ -34,6 +34,18 @@ def _messages(question: str, context: str) -> List[dict]:
     ]
 
 
+async def chat(system: str, user: str, *, temperature: float = 0.1, max_tokens: int = 200, timeout: float = 30.0) -> str:
+    """범용 단발 호출 (답변 생성 외 용도: 클러스터 이름 짓기 등). 같은 OpenAI 호환 설정을 쓴다."""
+    url = settings.llm_base_url.rstrip("/") + "/chat/completions"
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        res = await client.post(url, headers=_headers(), json={
+            "model": settings.llm_model, "temperature": temperature, "max_tokens": max_tokens,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        })
+        res.raise_for_status()
+        return (res.json()["choices"][0]["message"]["content"] or "").strip()
+
+
 async def generate_answer(question: str, context: str) -> str:
     url = settings.llm_base_url.rstrip("/") + "/chat/completions"
     async with httpx.AsyncClient(timeout=120.0) as client:

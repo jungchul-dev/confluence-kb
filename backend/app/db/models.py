@@ -37,14 +37,23 @@ class Document(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)  # Confluence 수정일
     allowed_groups: Mapped[List[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)  # ["*"] = 제한 없음
     indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    # 문서 단위 임베딩 — 제목 + 경로 접두를 뺀 본문 앞부분(DOC_EMBED_CHARS)으로 만든다. 클러스터링(분석) 전용.
+    # 청크 임베딩은 경로 접두가 포함돼 있어 "어느 프로젝트인가"가 가장 강한 신호가 되므로 분석에는 쓰지 않는다.
+    # 기존 데이터는 backend/migrate_doc_embeddings.py 로 채운다. NULL 이면 분석 API 가 청크 평균으로 대체한다.
+    embedding = mapped_column(Vector(settings.embedding_dim), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("page_id", "attachment_id", name="uq_documents_page_attachment"),
         Index("idx_documents_space", "space_key"),
         Index("idx_documents_page", "page_id"),
+        Index(
+            "idx_documents_embedding", "embedding",
+            postgresql_using="hnsw", postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
     )
 
 
+DOC_EMBED_CHARS = 1200  # 문서 임베딩에 넣는 본문 길이 (제목 제외)
 TSV_CONFIG = "korean"  # textsearch_ko 가 만드는 텍스트 검색 설정. 질의 쪽(services/retrieval.py)도 같은 값을 쓴다
 TSV_EXPRESSION = (
     f"setweight(to_tsvector('{TSV_CONFIG}', coalesce(substring(content from '^\\[([^\\n]*)\\]'), '')), 'A') || "

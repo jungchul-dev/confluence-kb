@@ -56,6 +56,7 @@ API 문서: http://localhost:8001/docs
 
 - 증분 동기화는 cron 으로 `./sync.sh --mode incremental` 을 30분마다, 전체 동기화(삭제 페이지 정리 포함)는 야간 1회 `--mode full` 을 권장한다. 단일 프로세스로 돌리려면 `--loop`. 예시는 `deploy/README.md`.
 - 임베딩 모델을 바꾸면 `db/run.sh --reset` 후 전체 동기화로 재색인한다.
+- 분석 탭의 클러스터링은 `documents.embedding`(제목 + 경로 접두를 뺀 본문 앞 1,200자) 을 쓴다. 청크 임베딩은 경로 접두 때문에 프로젝트·공간 기준으로 뭉치기 때문이다. 색인 시 자동으로 채워지며, 기존 데이터는 `backend/migrate_doc_embeddings.py` 로 채운다 (컬럼·인덱스도 만든다). 비어 있는 문서는 청크 평균으로 대체되고 화면에 개수가 표시된다. k=0 이면 실루엣 점수로 클러스터 수를 고르고, 제목은 본문 TF-IDF 키워드 상위 3개다.
 - 키워드 검색은 `textsearch_ko`(mecab-ko) 로 한국어 형태소 분석을 한다. 이미지 빌드 시 mecab-ko·사전·확장을 소스 빌드하므로 처음 빌드는 5분 안팎 걸린다. 기존 볼륨을 유지한 채 이미지를 교체했다면 `db/migrate_korean_tsv.sql` 을 한 번 실행해 확장 생성과 `chunks.tsv` 재생성을 한다 (임베딩 재계산 불필요). `tsv` 는 경로 접두를 A, 본문을 B 가중치로 나눠 색인한다.
 - `RERANK_PROVIDER=local` 은 torch 를 끌어오므로 서버에 CPU 2코어 이상이 필요하다. 느리면 `none` 으로 두고 운영하다가 붙인다. 별도 bge-reranker TEI 서버가 있다면 `http` 로 두고 `RERANK_API_URL` 만 가리키면 된다(torch 불필요).
 - 프론트는 개발 중 `localStorage.userId` / `userGroups` 를 헤더로 보낸다. 운영에서는 SSO 리버스 프록시가 같은 헤더를 넣어야 한다.
