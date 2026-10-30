@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Alert, Link, Chip, Pagination, Tooltip } from '@mui/material'
+import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tooltip } from '@mui/material'
 import { HelpOutlined as HelpIcon } from '@mui/icons-material'
 import { ResponsiveCirclePacking } from '@nivo/circle-packing'
 import { animated, to } from '@react-spring/web'
@@ -239,11 +239,27 @@ export default function AnalyticsView() {
                 </Typography>
               )}
               <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                {/* 검색 결과 목록과 같은 카드 형태: 종류 칩 + 제목, 아래 줄에 경로 · 공간 */}
                 {pageDocs.map((d) => (
-                  <Box key={d.document_id} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, py: 0.75, borderTop: 1, borderColor: 'divider', fontSize: '0.8125rem', '&:first-of-type': { borderTop: 0 } }}>
-                    <Chip size="small" label={d.kind === 'attachment' ? '첨부' : '페이지'} color={d.kind === 'attachment' ? 'success' : 'primary'} variant="filled" sx={{ flexShrink: 0 }} />
-                    <Link href={d.url} target="_blank" rel="noreferrer" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{d.title}</Link>
-                    {d.space_key && <Typography color="text.secondary" sx={{ ml: 'auto', fontSize: '0.75rem', flexShrink: 0 }}>{d.space_key}</Typography>}
+                  <Box
+                    key={d.document_id}
+                    component="a"
+                    href={d.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    sx={{
+                      display: 'block', p: 1.25, mb: 0.75, borderRadius: 1.5, border: 1, borderColor: 'divider',
+                      color: 'inherit', textDecoration: 'none', cursor: 'pointer',
+                      '&:hover': { backgroundColor: 'action.hover', borderColor: 'borderStrong' },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                      <Chip size="small" label={d.kind === 'attachment' ? '첨부' : '페이지'} color={d.kind === 'attachment' ? 'success' : 'primary'} variant="filled" sx={{ flexShrink: 0 }} />
+                      <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{d.title}</Typography>
+                    </Box>
+                    <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
+                      {d.path}{d.space_key ? ` · ${d.space_key}` : ''}
+                    </Typography>
                   </Box>
                 ))}
               </Box>

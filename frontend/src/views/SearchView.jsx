@@ -151,11 +151,29 @@ export default function SearchView() {
                     {related[selected.document_id]
                       ? related[selected.document_id].length > 0
                         ? related[selected.document_id].map((d) => (
-                          <Box key={d.document_id} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, py: 0.5, fontSize: '0.8125rem', minWidth: 0 }}>
-                            <KindChip kind={d.kind} />
-                            <Link href={d.url} target="_blank" rel="noreferrer" noWrap sx={{ minWidth: 0 }}>{d.title}</Link>
-                            <Typography color="text.secondary" sx={{ fontSize: '0.75rem', flexShrink: 0 }}>{d.space_key}</Typography>
-                            <Tooltip title={`코사인 유사도 ${d.score.toFixed(3)}`}><Typography sx={{ ml: 'auto', fontFamily: MONO_FONT, fontSize: '0.75rem', color: 'text.secondary', flexShrink: 0 }}>유사도 {Math.round(d.score * 100)}%</Typography></Tooltip>
+                          // 검색 결과 목록과 같은 카드 형태: 종류 칩 + 제목 + 유사도, 아래 줄에 경로 · 공간
+                          <Box
+                            key={d.document_id}
+                            component="a"
+                            href={d.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            sx={{
+                              display: 'block', p: 1.25, mb: 0.75, borderRadius: 1.5, border: 1, borderColor: 'divider',
+                              color: 'inherit', textDecoration: 'none', cursor: 'pointer',
+                              '&:hover': { backgroundColor: 'action.hover', borderColor: 'borderStrong' },
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                              <KindChip kind={d.kind} />
+                              <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{d.title}</Typography>
+                              <Tooltip title={`코사인 유사도 ${d.score.toFixed(3)}`}>
+                                <Typography sx={{ ml: 'auto', fontFamily: MONO_FONT, fontSize: '0.75rem', color: 'text.secondary', flexShrink: 0 }}>유사도 {Math.round(d.score * 100)}%</Typography>
+                              </Tooltip>
+                            </Box>
+                            <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
+                              {d.path}{d.space_key ? ` · ${d.space_key}` : ''}{d.updated_at ? ` · ${fmtDate(d.updated_at)}` : ''}
+                            </Typography>
                           </Box>
                         ))
                         : <Typography sx={{ fontSize: '0.8125rem', color: 'text.disabled' }}>유사 문서가 없습니다.</Typography>
