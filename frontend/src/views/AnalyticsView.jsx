@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Box, Typography, TextField, Button, Card, Alert, Link, Chip } from '@mui/material'
 import { ResponsiveCirclePacking } from '@nivo/circle-packing'
 import * as api from '../api'
@@ -58,7 +58,7 @@ export default function AnalyticsView() {
       {clusters.length > 0 && (
         <Box sx={{ display: 'flex', gap: 2 }}>
           {/* 버블 차트 */}
-          <Box sx={{ height: 700, flex: 1, minWidth: 0 }}>
+          <Box sx={{ height: 800, flex: 1, minWidth: 0 }}>
             <ResponsiveCirclePacking
               data={bubbleData}
               margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
@@ -88,9 +88,9 @@ export default function AnalyticsView() {
 
           {/* 선택된 클러스터 상세 */}
           {selected && (
-            <Card variant="outlined" sx={{ p: 2, width: 480, flexShrink: 0, alignSelf: 'flex-start', maxHeight: 650, overflow: 'auto' }}>
+            <Card variant="outlined" sx={{ p: 2, width: 560, flexShrink: 0, alignSelf: 'flex-start', maxHeight: 800, overflow: 'auto' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <Chip size="small" label={`클러스터 ${selected.cluster_id}`} sx={{ backgroundColor: CLUSTER_COLORS[clusters.findIndex(c => c.cluster_id === selected.cluster_id) % CLUSTER_COLORS.length], color: '#fff', fontWeight: 600 }} />
+                <Chip size="small" label={selected.representative_docs[0] ? shortTitle(selected.representative_docs[0].title) : `클러스터 ${selected.cluster_id}`} sx={{ backgroundColor: CLUSTER_COLORS[clusters.findIndex(c => c.cluster_id === selected.cluster_id) % CLUSTER_COLORS.length], color: '#fff', fontWeight: 600 }} />
                 <Typography color="text.secondary">{selected.doc_count}개 문서</Typography>
               </Box>
               {(selected.all_docs || selected.representative_docs).map((d) => (
