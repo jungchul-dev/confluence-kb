@@ -33,8 +33,8 @@ export default function AnalyticsView() {
   }
 
   const bubbleData = {
-    id: '전체',
-    color: '#f4f4f5',
+    id: '',
+    color: 'transparent',
     children: clusters.map((c, i) => ({
       id: c.representative_docs[0] ? shortTitle(c.representative_docs[0].title) : `클러스터 ${c.cluster_id}`,
       value: c.doc_count,
@@ -58,7 +58,7 @@ export default function AnalyticsView() {
       {clusters.length > 0 && (
         <Box sx={{ display: 'flex', gap: 2 }}>
           {/* 버블 차트 */}
-          <Box sx={{ height: 500, flex: 1, minWidth: 0 }}>
+          <Box sx={{ height: 700, flex: 1, minWidth: 0 }}>
             <ResponsiveCirclePacking
               data={bubbleData}
               margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
@@ -88,20 +88,17 @@ export default function AnalyticsView() {
 
           {/* 선택된 클러스터 상세 */}
           {selected && (
-            <Card variant="outlined" sx={{ p: 2, width: 360, flexShrink: 0, alignSelf: 'flex-start' }}>
+            <Card variant="outlined" sx={{ p: 2, width: 480, flexShrink: 0, alignSelf: 'flex-start', maxHeight: 650, overflow: 'auto' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
                 <Chip size="small" label={`클러스터 ${selected.cluster_id}`} sx={{ backgroundColor: CLUSTER_COLORS[clusters.findIndex(c => c.cluster_id === selected.cluster_id) % CLUSTER_COLORS.length], color: '#fff', fontWeight: 600 }} />
                 <Typography color="text.secondary">{selected.doc_count}개 문서</Typography>
               </Box>
-              {selected.representative_docs.map((d) => (
+              {(selected.all_docs || selected.representative_docs).map((d) => (
                 <Box key={d.document_id} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, py: 0.75, borderTop: 1, borderColor: 'divider', fontSize: '0.8125rem', '&:first-of-type': { borderTop: 0 } }}>
                   <Chip size="small" label={d.kind === 'attachment' ? '첨부' : '페이지'} color={d.kind === 'attachment' ? 'success' : 'primary'} variant="filled" />
                   <Link href={d.url} target="_blank" rel="noreferrer">{d.title}</Link>
                 </Box>
               ))}
-              {selected.all_titles.length > selected.representative_docs.length && (
-                <Typography color="text.secondary" sx={{ fontSize: '0.75rem', mt: 1.5 }}>외 {selected.all_titles.length - selected.representative_docs.length}개 문서</Typography>
-              )}
             </Card>
           )}
         </Box>
