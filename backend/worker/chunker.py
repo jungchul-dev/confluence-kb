@@ -2,7 +2,7 @@
 
 - 섹션이 CHUNK_MAX_TOKENS 보다 길면 문단 경계에서, 그래도 길면 문장 경계에서 나눈다
 - 짧은 섹션 여러 개는 CHUNK_TARGET_TOKENS 까지 합친다 (같은 헤딩 안에서만)
-- 겹침: 다음 청크 앞에 직전 청크 끝부분을 CHUNK_OVERLAP_RATIO 만큼 둔다
+- 겹침: 같은 섹션에서 잘린 다음 청크 앞에 직전 청크의 마지막 문장(들)을 CHUNK_OVERLAP_RATIO 길이만큼 둔다 (섹션이 바뀌면 없음)
 - 접두: "공간 > 상위 > 제목 > 섹션" (첨부는 "제목 > 파일명 > 섹션")
 """
 import re
@@ -72,14 +72,24 @@ def _pack(pieces: List[str], target: int) -> List[str]:
     return out
 
 
+_SENT_END = re.compile(r"(?<=[.!?。])\s+|(?<=다\.)\s+")
+
+
 def _tail(text: str, ratio: float) -> str:
+    """겹침으로 붙일 직전 청크의 끝부분. 글자 수(ratio)만큼 자르되 문장 경계에서 시작하게 해 "는다." 같은 조각이 남지 않게 한다.
+    마지막 문장 하나가 비율보다 길면 그 문장 전체를 쓴다. 문장 경계가 없으면(표·코드 등) 겹침을 넣지 않는다."""
     n = int(len(text) * ratio)
     if n <= 0:
         return ""
-    tail = text[-n:]
-    # 단어 중간에서 시작하지 않게 첫 공백 뒤부터
-    sp = tail.find(" ")
-    return tail[sp + 1:] if 0 <= sp < len(tail) - 1 else tail
+    sentences = [x for x in _SENT_END.split(text.strip()) if x and x.strip()]
+    if len(sentences) < 2:
+        return ""
+    out: List[str] = []
+    for sent in reversed(sentences[1:]):  # 첫 문장은 제외 (청크 전체를 다시 붙이지 않게)
+        if out and len(" ".join(out)) + len(sent) > n:
+            break
+        out.insert(0, sent.strip())
+    return " ".join(out)
 
 
 def chunk_sections(sections: List[Section], path_prefix: str) -> List[ChunkDraft]:
@@ -87,17 +97,15 @@ def chunk_sections(sections: List[Section], path_prefix: str) -> List[ChunkDraft
     max_tokens = settings.chunk_max_tokens
     overlap = settings.chunk_overlap_ratio
     drafts: List[ChunkDraft] = []
-    prev_body = ""
     ordinal = 0
     for sec in sections:
         pieces = _split_long(sec.text, max_tokens)
         bodies = _pack(pieces, target)
+        prev_body = ""  # 겹침은 같은 섹션(헤딩) 안에서 잘린 청크 사이에만 넣는다. 섹션이 바뀌면 초기화
         for body in bodies:
             head = f"{path_prefix} > {sec.heading}" if sec.heading else path_prefix
-            if prev_body and overlap > 0:
-                body_with_overlap = (_tail(prev_body, overlap) + "\n" + body).strip()
-            else:
-                body_with_overlap = body
+            tail = _tail(prev_body, overlap) if prev_body and overlap > 0 else ""
+            body_with_overlap = (tail + "\n" + body).strip() if tail else body
             content = f"[{head}]\n{body_with_overlap}"
             drafts.append(ChunkDraft(ordinal=ordinal, heading=sec.heading, content=content, token_count=approx_tokens(content)))
             ordinal += 1
