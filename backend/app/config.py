@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # 동기화
     sync_incremental_minutes: int = 30
-    skip_space_permissions: bool = False  # true 면 공간 권한 조회를 건너뛰고 모든 문서를 ['*'](제한 없음) 로 둔다
+    skip_space_permissions: bool = False  # true 면 검색 시 권한 체크를 건너뛴다 (동기화는 권한을 정상 수집)
 
     @property
     def space_keys(self) -> List[str]:
