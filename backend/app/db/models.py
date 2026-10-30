@@ -45,6 +45,13 @@ class Document(Base):
     )
 
 
+TSV_CONFIG = "korean"  # textsearch_ko 가 만드는 텍스트 검색 설정. 질의 쪽(services/retrieval.py)도 같은 값을 쓴다
+TSV_EXPRESSION = (
+    f"setweight(to_tsvector('{TSV_CONFIG}', coalesce(substring(content from '^\\[([^\\n]*)\\]'), '')), 'A') || "
+    f"setweight(to_tsvector('{TSV_CONFIG}', regexp_replace(content, '^\\[[^\\n]*\\]\\n?', '')), 'B')"
+)
+
+
 class Chunk(Base):
     __tablename__ = "chunks"
 
@@ -56,7 +63,10 @@ class Chunk(Base):
     heading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)  # 경로 접두 포함
     embedding = mapped_column(Vector(settings.embedding_dim), nullable=False)
-    tsv = mapped_column(TSVECTOR, Computed("to_tsvector('simple', content)", persisted=True))
+    # 키워드 검색용. 한국어 형태소 분석기(textsearch_ko, 설정 'korean')로 조사·어미를 떼고 색인한다.
+    # 청크 앞의 "[공간 > 상위 > 제목 > 섹션]" 접두는 A 가중치, 본문은 B 가중치로 분리해 제목·경로 검색은 살리고
+    # 접두 토큰이 본문 점수에 섞이지 않게 한다. 식을 바꾸면 db/migrate_korean_tsv.sql 도 같이 바꾼다.
+    tsv = mapped_column(TSVECTOR, Computed(TSV_EXPRESSION, persisted=True))
     token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     __table_args__ = (

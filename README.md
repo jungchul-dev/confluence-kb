@@ -12,7 +12,7 @@ TestFlow AI(5173 / 8000 / 5432)와 같은 머신에서 함께 띄울 수 있도�
 | `frontend/` React + Vite | **5174** | `cd frontend && ./run.sh` |
 | `backend/app` FastAPI API 서버 | **8001** | `cd backend && ./run.sh` |
 | `backend/worker` 동기화 워커 | - | `cd backend && ./sync.sh --mode full` |
-| `db/` PostgreSQL 16 + pgvector (Docker) | **5433** | `cd db && ./run.sh` (컨테이너 `confluence-kb-postgres`, 볼륨 `confluence-kb-pgdata`) |
+| `db/` PostgreSQL 16 + pgvector + textsearch_ko (Docker) | **5433** | `cd db && ./run.sh` (컨테이너 `confluence-kb-postgres`, 볼륨 `confluence-kb-pgdata`) |
 
 ## 처음 띄우기
 
@@ -37,7 +37,7 @@ API 문서: http://localhost:8001/docs
 ## 동작 개요
 
 - **수집** `worker/run_sync.py` — 공간을 순회하며 페이지 버전·해시를 `sync_state` 와 비교해 바뀐 것만 처리한다. 본문은 헤딩 단위로 청킹하고(`worker/chunker.py`), 허용 확장자의 첨부(pdf·docx·pptx·xlsx·md·txt)는 내려받아 텍스트로 풀어 같은 테이블에 넣는다. 페이지 조회 제한은 `documents.allowed_groups` 로 저장한다.
-- **질의** `POST /api/v1/ask` — pgvector 코사인 + tsvector 키워드를 RRF 로 합친 하이브리드 검색(권한 필터 포함) → 리랭킹 → 같은 문서 청크 묶기 → LLM 답변. 답변에는 `[n]` 출처와 수정일이 붙고, 후보가 없으면 "못 찾음"으로 응답한다. `?stream=true` 면 SSE.
+- **질의** `POST /api/v1/ask` — pgvector 코사인 + tsvector 키워드(한국어 형태소 분석 `korean` 설정)를 RRF 로 합친 하이브리드 검색(권한 필터 포함) → 리랭킹 → 같은 문서 청크 묶기 → LLM 답변. 답변에는 `[n]` 출처와 수정일이 붙고, 후보가 없으면 "못 찾음"으로 응답한다. `?stream=true` 면 SSE.
 - **관리** `GET /api/v1/admin/sync/status`, `POST /api/v1/admin/sync/run` — 공간별 상태와 수동 동기화. 프론트 "동기화" 탭.
 
 ## 설정 요약 (`backend/.env`)
@@ -56,6 +56,7 @@ API 문서: http://localhost:8001/docs
 
 - 증분 동기화는 cron 으로 `./sync.sh --mode incremental` 을 30분마다, 전체 동기화(삭제 페이지 정리 포함)는 야간 1회 `--mode full` 을 권장한다. 단일 프로세스로 돌리려면 `--loop`. 예시는 `deploy/README.md`.
 - 임베딩 모델을 바꾸면 `db/run.sh --reset` 후 전체 동기화로 재색인한다.
+- 키워드 검색은 `textsearch_ko`(mecab-ko) 로 한국어 형태소 분석을 한다. 이미지 빌드 시 mecab-ko·사전·확장을 소스 빌드하므로 처음 빌드는 5분 안팎 걸린다. 기존 볼륨을 유지한 채 이미지를 교체했다면 `db/migrate_korean_tsv.sql` 을 한 번 실행해 확장 생성과 `chunks.tsv` 재생성을 한다 (임베딩 재계산 불필요). `tsv` 는 경로 접두를 A, 본문을 B 가중치로 나눠 색인한다.
 - `RERANK_PROVIDER=local` 은 torch 를 끌어오므로 서버에 CPU 2코어 이상이 필요하다. 느리면 `none` 으로 두고 운영하다가 붙인다. 별도 bge-reranker TEI 서버가 있다면 `http` 로 두고 `RERANK_API_URL` 만 가리키면 된다(torch 불필요).
 - 프론트는 개발 중 `localStorage.userId` / `userGroups` 를 헤더로 보낸다. 운영에서는 SSO 리버스 프록시가 같은 헤더를 넣어야 한다.
 

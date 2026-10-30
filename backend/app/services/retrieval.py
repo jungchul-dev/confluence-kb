@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.db.models import TSV_CONFIG
 from app.permissions import CurrentUser
 from app.services.embeddings import embed_query
 
@@ -55,8 +56,20 @@ _VECTOR_SQL = text(f"""
 _KEYWORD_SQL = text(f"""
     SELECT {_SELECT_COLS}, ts_rank_cd(c.tsv, q) AS score
     FROM chunks c JOIN documents d ON d.id = c.document_id,
-         websearch_to_tsquery('simple', :q) q
+         websearch_to_tsquery('{TSV_CONFIG}', :q) q
     WHERE c.tsv @@ q AND {_PERM}
+    ORDER BY score DESC
+    LIMIT :k
+""")
+
+# OR 폴백: websearch_to_tsquery 는 단어를 AND 로 묶어서 단어가 많은 질문은 전부 포함한 청크가 없으면 0건이 된다.
+# AND 결과가 비면 '&' 를 '|' 로 바꾼 질의로 다시 찾는다. ts_rank_cd 는 더 많은 단어를 포함한 청크를 높게 매긴다.
+# 구문 검색('<->')과 제외('!')는 그대로 유지된다.
+_KEYWORD_OR_SQL = text(f"""
+    SELECT {_SELECT_COLS}, ts_rank_cd(c.tsv, qq.q) AS score
+    FROM chunks c JOIN documents d ON d.id = c.document_id,
+         (SELECT CAST(replace(CAST(websearch_to_tsquery('{TSV_CONFIG}', :q) AS text), ' & ', ' | ') AS tsquery) AS q) qq
+    WHERE c.tsv @@ qq.q AND {_PERM}
     ORDER BY score DESC
     LIMIT :k
 """)
@@ -82,10 +95,11 @@ async def hybrid_search(
         # 관리자·개발 모드 또는 권한 체크 비활성화: 권한 조건을 빼고 전체를 검색한다
         vector_sql = text(str(_VECTOR_SQL).replace(_PERM, "TRUE"))
         keyword_sql = text(str(_KEYWORD_SQL).replace(_PERM, "TRUE"))
+        keyword_or_sql = text(str(_KEYWORD_OR_SQL).replace(_PERM, "TRUE"))
         params_v = {"qvec": vec_param, "k": k}
         params_k = {"q": question, "k": k}
     else:
-        vector_sql, keyword_sql = _VECTOR_SQL, _KEYWORD_SQL
+        vector_sql, keyword_sql, keyword_or_sql = _VECTOR_SQL, _KEYWORD_SQL, _KEYWORD_OR_SQL
         params_v = {"qvec": vec_param, "k": k, "groups": user.groups}
         params_k = {"q": question, "k": k, "groups": user.groups}
 
@@ -98,8 +112,11 @@ async def hybrid_search(
         c.sources.append("vector")
         c.rrf_score += 1.0 / (rrf_k + rank)
 
-    kres = await db.execute(keyword_sql, params_k)
-    for rank, row in enumerate(kres.fetchall(), start=1):
+    krows = (await db.execute(keyword_sql, params_k)).fetchall()
+    if not krows:
+        # AND 로 한 건도 없으면 OR 로 폴백 (단어가 많은 자연어 질문에서 흔하다)
+        krows = (await db.execute(keyword_or_sql, params_k)).fetchall()
+    for rank, row in enumerate(krows, start=1):
         c = merged.setdefault(row.chunk_id, _row_to_candidate(row))
         c.keyword_rank = rank
         c.sources.append("keyword")

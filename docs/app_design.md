@@ -95,7 +95,8 @@ chunks (
   heading     text,
   content     text not null,              -- 경로 접두 포함 본문
   embedding   vector(1536) not null,
-  tsv         tsvector generated always as (to_tsvector('simple', content)) stored,
+  tsv         tsvector generated always as (                 -- 한국어 형태소 분석(textsearch_ko 'korean'), 접두 A·본문 B 가중치
+                setweight(to_tsvector('korean', <경로 접두>), 'A') || setweight(to_tsvector('korean', <본문>), 'B')) stored,
   token_count int not null
 )
 -- 인덱스: hnsw (embedding vector_cosine_ops), gin (tsv), btree (document_id)
