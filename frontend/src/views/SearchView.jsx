@@ -10,6 +10,7 @@ export default function SearchView() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [open, setOpen] = useState({})
+  const [related, setRelated] = useState({})
 
   const submit = async (e) => {
     e?.preventDefault()
@@ -17,11 +18,22 @@ export default function SearchView() {
     setLoading(true); setError('')
     try {
       const data = await api.search(q.trim(), 20)
-      setResults(data.results); setPassed(data.passed); setOpen({})
+      setResults(data.results); setPassed(data.passed); setOpen({}); setRelated({})
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const toggle = async (r) => {
+    const isOpen = !open[r.chunk_id]
+    setOpen((o) => ({ ...o, [r.chunk_id]: !o[r.chunk_id] }))
+    if (isOpen && !related[r.document_id]) {
+      try {
+        const data = await api.getRelated(r.document_id, 5)
+        setRelated((prev) => ({ ...prev, [r.document_id]: data.results }))
+      } catch { /* 유사 문서 조회 실패는 무시 */ }
     }
   }
 
@@ -36,7 +48,7 @@ export default function SearchView() {
       <ul className="results">
         {results.map((r) => (
           <li key={r.chunk_id} className="result">
-            <div className="result-head" onClick={() => setOpen((o) => ({ ...o, [r.chunk_id]: !o[r.chunk_id] }))}>
+            <div className="result-head" onClick={() => toggle(r)}>
               <span className={`kind ${r.kind}`}>{r.kind === 'attachment' ? '첨부' : '페이지'}</span>
               <span className="title">{r.title}</span>
               {r.heading && <span className="muted"> › {r.heading}</span>}
@@ -50,11 +62,28 @@ export default function SearchView() {
               <span className="muted"> · {fmtDate(r.updated_at)}</span>
               <a href={r.url} target="_blank" rel="noreferrer"> 열기 ↗</a>
             </div>
-            {open[r.chunk_id] && <pre className="chunk">{r.content}</pre>}
+            {open[r.chunk_id] && (
+              <>
+                <pre className="chunk">{r.content}</pre>
+                {related[r.document_id] && related[r.document_id].length > 0 && (
+                  <div className="related">
+                    <div className="related-title">유사 문서</div>
+                    {related[r.document_id].map((d) => (
+                      <div key={d.document_id} className="related-item">
+                        <span className={`kind ${d.kind}`}>{d.kind === 'attachment' ? '첨부' : '페이지'}</span>
+                        <a href={d.url} target="_blank" rel="noreferrer">{d.title}</a>
+                        <span className="muted">{d.space_key}</span>
+                        <span className="score">{d.score.toFixed(3)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </li>
         ))}
       </ul>
-      {!loading && results.length === 0 && !error && <div className="empty muted">검색 결과가 여기에 표시됩니다. 행을 누르면 청크 본문이 펼쳐집니다.</div>}
+      {!loading && results.length === 0 && !error && <div className="empty muted">검색 결과가 여기에 표시됩니다. 행을 누르면 청크 본문과 유사 문서가 펼쳐집니다.</div>}
     </div>
   )
 }
