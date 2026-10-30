@@ -14,7 +14,7 @@ const Turn = ({ turn, running, selected, onSelect }) => {
   if (turn.role === 'user') {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
-        <Box sx={{ maxWidth: '85%', px: 1.75, py: 1.25, borderRadius: 2, backgroundColor: 'primary.main', color: 'primary.contrastText', whiteSpace: 'pre-wrap', lineHeight: 1.7, fontSize: '0.9375rem' }}>{turn.content}</Box>
+        <Box sx={{ maxWidth: '85%', px: 1.5, py: 0.75, borderRadius: 2, backgroundColor: 'primary.main', color: 'primary.contrastText', whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: '0.9375rem' }}>{turn.content}</Box>
       </Box>
     )
   }
@@ -22,7 +22,7 @@ const Turn = ({ turn, running, selected, onSelect }) => {
     <Box
       onClick={onSelect}
       sx={{
-        mb: 2, px: 1.75, py: 1.25, borderRadius: 2, border: 1, cursor: onSelect ? 'pointer' : 'default',
+        mb: 2, px: 1.5, py: 1, borderRadius: 2, border: 1, cursor: onSelect ? 'pointer' : 'default',
         borderColor: selected ? 'primary.main' : 'divider', backgroundColor: selected ? 'action.selected' : 'background.default',
         color: turn.found === false ? 'text.secondary' : 'text.primary',
       }}
