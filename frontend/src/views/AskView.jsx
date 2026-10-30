@@ -76,12 +76,6 @@ export default function AskView() {
           <SourceList sources={meta.sources} />
         </Card>
       )}
-
-      {!answer && !running && !error && (
-        <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
-          질문을 입력하면 Confluence 문서를 기반으로 답변합니다.
-        </Box>
-      )}
     </Box>
   )
 }
