@@ -109,7 +109,7 @@ export default function SearchView() {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5, flexShrink: 0 }}>
                   <KindChip kind={selected.kind} />
                   <Typography variant="h6" noWrap sx={{ minWidth: 0 }}>{selected.title}</Typography>
-                  <Link href={selected.url} target="_blank" rel="noreferrer" sx={{ ml: 'auto', flexShrink: 0, fontSize: '0.8125rem' }}>열기 ↗</Link>
+                  <Link href={selected.url} target="_blank" rel="noreferrer" sx={{ ml: 'auto', flexShrink: 0, fontSize: '0.8125rem' }}>열기</Link>
                 </Box>
                 <Typography sx={{ fontSize: '0.75rem', mb: 1, color: 'text.secondary', flexShrink: 0 }}>
                   {selected.path}{selected.heading ? ` › ${selected.heading}` : ''} · 수정 {fmtDate(selected.updated_at)}

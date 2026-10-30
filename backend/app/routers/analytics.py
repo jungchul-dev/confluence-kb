@@ -77,7 +77,8 @@ _DOC_EMBEDDINGS_SQL = text(f"""
     FROM chunks c JOIN documents d ON d.id = c.document_id
     WHERE {_PERM}
     GROUP BY d.id, d.page_id, d.title, d.path, d.url, d.space_key, d.kind, d.updated_at, d.embedding
-""")
+    ORDER BY d.id
+""")  # 행 순서가 K-Means 초기화에 영향을 주므로 ORDER BY 로 고정한다 (같은 데이터면 같은 결과)
 
 _KEYWORD_MIN_LEN = 2
 _KEYWORD_RE = re.compile(r"^[가-힣a-zA-Z][가-힣a-zA-Z0-9]*$")

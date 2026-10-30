@@ -34,8 +34,15 @@ RUN cd /tmp \
     && wget -q https://bitbucket.org/eunjeon/mecab-ko-dic/downloads/mecab-ko-dic-${MECAB_KO_DIC_VERSION}.tar.gz \
     && tar xzf mecab-ko-dic-${MECAB_KO_DIC_VERSION}.tar.gz && cd mecab-ko-dic-${MECAB_KO_DIC_VERSION} \
     && ./autogen.sh && ./configure --prefix=/usr/local --with-mecab-config=/usr/local/bin/mecab-config \
-    && make -j"$(nproc)" && make install \
-    && sed -i 's|^dicdir.*|dicdir = /usr/local/lib/mecab/dic/mecab-ko-dic|' /usr/local/etc/mecabrc
+    && make -j"$(nproc)"
+
+# 사용자 사전 (db/user-dic/*.csv) — 조각나는 IT 용어를 통째로 인식시킨다. add-userdic.sh 가 비용을 계산하고 사전을 다시 컴파일한다
+COPY user-dic/*.csv /tmp/mecab-ko-dic-${MECAB_KO_DIC_VERSION}/user-dic/
+RUN cd /tmp/mecab-ko-dic-${MECAB_KO_DIC_VERSION} \
+    && PATH=/usr/local/bin:$PATH ./tools/add-userdic.sh \
+    && make install \
+    && sed -i 's|^dicdir.*|dicdir = /usr/local/lib/mecab/dic/mecab-ko-dic|' /usr/local/etc/mecabrc \
+    && echo '에스컬레이션 쿠버네티스 임베딩' | mecab -O wakati
 
 # textsearch_ko (PostgreSQL 확장) → ts_mecab_ko.so + textsearch_ko.control/--1.0.sql
 RUN cd /tmp && git clone --depth 1 ${TEXTSEARCH_KO_REPO} textsearch_ko && cd textsearch_ko \
