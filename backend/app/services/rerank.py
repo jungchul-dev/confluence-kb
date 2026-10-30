@@ -68,25 +68,33 @@ async def rerank(question: str, candidates: List[Candidate], *, top_k: Optional[
 async def _rerank_http(
     question: str, candidates: List[Candidate], top_k: int
 ) -> Tuple[List[Candidate], bool]:
-    """TEI /rerank API 로 후보를 채점해 (상위 top_k, 하한 통과 여부) 를 돌려준다."""
+    """외부 reranker API 로 후보를 채점해 (상위 top_k, 하한 통과 여부) 를 돌려준다."""
     if not settings.rerank_api_url:
         raise RuntimeError(
             "RERANK_PROVIDER=http 이지만 RERANK_API_URL 이 비어 있습니다. "
-            "TEI 서버 베이스 URL 을 설정하세요 (예: http://rerank:8080)"
+            "reranker 서버 URL 을 설정하세요 (예: http://rerank:8080/v1/rerank)"
         )
     url = settings.rerank_api_url.rstrip("/") + "/rerank"
     headers = {"Content-Type": "application/json"}
     if settings.rerank_api_key:
         headers["Authorization"] = f"Bearer {settings.rerank_api_key}"
-    payload = {"query": question, "texts": [c.content for c in candidates]}
+    payload = {
+        "model": settings.rerank_model,
+        "query": question,
+        "documents": [c.content for c in candidates],
+    }
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code != 200:
+            logger.error("reranker API %s -> %s: %s", url, resp.status_code, resp.text[:500])
         resp.raise_for_status()
-        results = resp.json()  # [{"index": int, "score": float}, ...] — score 내림차순
+        body = resp.json()
+        results = body.get("results", body) if isinstance(body, dict) else body
 
     for r in results:
-        candidates[r["index"]].rerank_score = float(r["score"])
+        score = float(r.get("relevance_score", r.get("score", 0)))
+        candidates[r["index"]].rerank_score = score
     ranked = sorted(candidates, key=lambda c: c.rerank_score or 0.0, reverse=True)
     top = ranked[:top_k]
     passed = (top[0].rerank_score or 0.0) >= settings.rerank_min_score
