@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Chip, Alert, Link } from '@mui/material'
+import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip } from '@mui/material'
 import * as api from '../api'
 import { MONO_FONT } from '../theme'
 
@@ -11,6 +11,35 @@ const Placeholder = ({ children }) => (
 
 const KindChip = ({ kind }) => (
   <Chip size="small" label={kind === 'attachment' ? '첨부' : '페이지'} color={kind === 'attachment' ? 'success' : 'primary'} variant="filled" sx={{ flexShrink: 0 }} />
+)
+
+// 관련도: 리랭커가 none 이면 RRF 를 1위=1.0 으로 정규화한 값, 리랭커가 있으면 리랭커 점수. 0~1 을 % 막대로 보여준다
+const RelevanceBar = ({ score }) => {
+  const pct = score == null ? null : Math.max(0, Math.min(100, Math.round(score * 100)))
+  return (
+    <Tooltip title={score == null ? '점수 없음' : `관련도 ${score.toFixed(3)} (리랭커 점수, 리랭커가 없으면 RRF 정규화 점수)`}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
+        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>관련도</Typography>
+        <Box sx={{ width: 90, height: 6, borderRadius: 3, backgroundColor: 'action.hover', overflow: 'hidden' }}>
+          <Box sx={{ width: `${pct ?? 0}%`, height: '100%', backgroundColor: pct == null ? 'transparent' : pct >= 70 ? 'success.main' : pct >= 40 ? 'warning.main' : 'text.disabled' }} />
+        </Box>
+        <Typography sx={{ fontSize: '0.75rem', fontFamily: MONO_FONT, width: 36, textAlign: 'right' }}>{pct == null ? '-' : `${pct}%`}</Typography>
+      </Box>
+    </Tooltip>
+  )
+}
+
+// 순위 배지: 양쪽 검색에 모두 걸린 결과는 진한 색, 한쪽만이면 회색, 안 걸린 쪽은 '없음'
+const RankBadge = ({ label, rank, both, tip }) => (
+  <Tooltip title={rank == null ? `${label} 검색 상위 후보에 없음` : `${tip} — ${rank}위`}>
+    <Chip
+      size="small"
+      variant={rank == null ? 'outlined' : 'filled'}
+      color={rank == null ? 'default' : both ? 'primary' : 'default'}
+      label={rank == null ? `${label} 없음` : `${label} ${rank}위`}
+      sx={{ fontSize: '0.75rem', height: 22, flexShrink: 0, ...(rank == null ? { color: 'text.disabled', borderStyle: 'dashed' } : {}) }}
+    />
+  </Tooltip>
 )
 
 export default function SearchView() {
@@ -85,10 +114,11 @@ export default function SearchView() {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
                         <KindChip kind={r.kind} />
                         <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{r.title}</Typography>
-                        <Box sx={{ ml: 'auto', display: 'flex', gap: 1.25, fontFamily: MONO_FONT, fontSize: '0.75rem', flexShrink: 0 }}>
-                          {r.rerank_score != null && <span>{r.rerank_score.toFixed(3)}</span>}
-                          <span style={{ color: '#71717a' }}>v{r.vector_rank ?? '-'} · k{r.keyword_rank ?? '-'}</span>
-                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75, minWidth: 0 }}>
+                        <RelevanceBar score={r.rerank_score} />
+                        <RankBadge label="의미" rank={r.vector_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="임베딩(벡터) 검색 순위. 검색어와 뜻이 비슷한 순서" />
+                        <RankBadge label="키워드" rank={r.keyword_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="키워드(형태소) 검색 순위. 검색어 단어가 실제로 들어 있는 순서" />
                       </Box>
                       <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
                         {r.heading ? `${r.heading} · ` : ''}{r.path} · {fmtDate(r.updated_at)}
