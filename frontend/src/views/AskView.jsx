@@ -44,7 +44,7 @@ export default function AskView() {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) submit(e) }}
-          placeholder="예) 2024년 결제 모듈 개편 제안에서 선택한 메시지 큐는? (Enter 전송, Shift+Enter 줄바꿈)"
+          placeholder="예) 2026년 ***** 제안에서 선택한 메시지 큐는? (Enter 전송, Shift+Enter 줄바꿈)"
           size="small"
         />
         {running
