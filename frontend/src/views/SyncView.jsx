@@ -51,15 +51,15 @@ export default function SyncView() {
       <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" sx={{ mb: 1 }}>공간</Typography>
         <Table size="small">
-          <TableHead><TableRow><TableCell>공간</TableCell><TableCell>문서</TableCell><TableCell>페이지</TableCell><TableCell>오류</TableCell><TableCell>마지막 동기화</TableCell></TableRow></TableHead>
+          <TableHead><TableRow><TableCell>공간</TableCell><TableCell>전체 문서</TableCell><TableCell>페이지</TableCell><TableCell>첨부</TableCell><TableCell>오류</TableCell><TableCell>마지막 동기화</TableCell></TableRow></TableHead>
           <TableBody>
             {(status?.spaces || []).map((s) => (
               <TableRow key={s.space_key}>
-                <TableCell><code>{s.space_key}</code></TableCell><TableCell>{s.documents}</TableCell><TableCell>{s.pages}</TableCell>
+                <TableCell><code>{s.space_key}</code></TableCell><TableCell>{s.documents}</TableCell><TableCell>{s.pages}</TableCell><TableCell>{s.attachments ?? 0}</TableCell>
                 <TableCell sx={{ color: s.errors ? 'error.main' : 'inherit' }}>{s.errors}</TableCell><TableCell>{fmt(s.last_synced_at)}</TableCell>
               </TableRow>
             ))}
-            {status && status.spaces.length === 0 && <TableRow><TableCell colSpan={5} align="center" color="text.secondary">CONFLUENCE_SPACES 가 비어 있습니다.</TableCell></TableRow>}
+            {status && status.spaces.length === 0 && <TableRow><TableCell colSpan={6} align="center" color="text.secondary">CONFLUENCE_SPACES 가 비어 있습니다.</TableCell></TableRow>}
           </TableBody>
         </Table>
       </Card>
