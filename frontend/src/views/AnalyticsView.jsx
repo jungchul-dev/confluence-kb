@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Alert, Link, Chip, Pagination } from '@mui/material'
+import { Box, Typography, TextField, Button, Card, Alert, Link, Chip, Pagination, Tooltip } from '@mui/material'
+import { HelpOutlined as HelpIcon } from '@mui/icons-material'
 import { ResponsiveCirclePacking } from '@nivo/circle-packing'
 import { animated, to } from '@react-spring/web'
 import * as api from '../api'
@@ -160,14 +161,39 @@ export default function AnalyticsView() {
         <Typography color="text.secondary">클러스터 수</Typography>
         <TextField type="number" size="small" sx={{ width: 70 }} slotProps={{ htmlInput: { min: 0, max: 50 } }} value={k} onChange={(e) => setK(Number(e.target.value))} />
         <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={load} disabled={loading}>{loading ? '분석 중…' : '분석'}</Button>
-        <Typography color="text.secondary">(0 = 자동)</Typography>
+        <Tooltip arrow title="0 이면 2~20 범위에서 실루엣 점수가 가장 높은 개수를 자동으로 고릅니다. 숫자를 넣으면 그 개수로 나눕니다.">
+          <Typography color="text.secondary" sx={{ cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>(0 = 자동)</Typography>
+        </Tooltip>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        전체 문서 {totalDocs}개 · 클러스터 {clusters.length}개
-        {info?.silhouette != null && ` · 실루엣 ${info.silhouette.toFixed(3)}`}
-        {info?.docs_without_embedding > 0 && ` · 문서 임베딩 없음 ${info.docs_without_embedding}개 (청크 평균으로 대체)`}
+      <Typography color="text.secondary" sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+        <span>전체 문서 {totalDocs}개 · 클러스터 {clusters.length}개</span>
+        {info?.silhouette != null && (
+          <Tooltip
+            arrow
+            placement="bottom-start"
+            slotProps={{ tooltip: { sx: { maxWidth: 420, fontSize: '0.8125rem', lineHeight: 1.6 } } }}
+            title={
+              <Box>
+                <strong>실루엣 점수</strong> — 클러스터가 얼마나 또렷하게 나뉘었는지를 -1~1 로 나타낸 값입니다.
+                문서마다 "같은 클러스터와의 평균 거리(a)"와 "가장 가까운 다른 클러스터와의 평균 거리(b)"를 재서 (b−a)/max(a,b) 를 구하고 전체 평균을 냅니다. 거리는 코사인 기준입니다.
+                <Box component="ul" sx={{ m: 0, mt: 0.75, pl: 2 }}>
+                  <li>0.5 이상: 경계가 뚜렷함</li>
+                  <li>0.25~0.5: 구조는 있으나 경계가 흐림 (문서 임베딩에서 흔한 범위)</li>
+                  <li>0.25 미만: 구조가 약함 · 음수: 잘못 배정된 문서가 많음</li>
+                </Box>
+                <Box sx={{ mt: 0.75 }}>클러스터 수가 0(자동)이면 2~20 중 이 점수가 가장 높은 k 를 고릅니다. 점수가 높다고 주제가 의미 있다는 보장은 없으니 제목과 문서 목록을 함께 보세요.</Box>
+              </Box>
+            }
+          >
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>
+              · 실루엣 {info.silhouette.toFixed(3)}
+              <HelpIcon sx={{ fontSize: 15 }} />
+            </Box>
+          </Tooltip>
+        )}
+        {info?.docs_without_embedding > 0 && <span> · 문서 임베딩 없음 {info.docs_without_embedding}개 (청크 평균으로 대체)</span>}
       </Typography>
 
       {clusters.length > 0 && (
