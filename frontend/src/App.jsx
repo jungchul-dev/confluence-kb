@@ -2,10 +2,12 @@ import React, { useState } from 'react'
 import AskView from './views/AskView'
 import SearchView from './views/SearchView'
 import SyncView from './views/SyncView'
+import AnalyticsView from './views/AnalyticsView'
 
 const TABS = [
   { key: 'ask', label: '질문' },
   { key: 'search', label: '검색' },
+  { key: 'analytics', label: '분석' },
   { key: 'sync', label: '동기화' },
 ]
 
@@ -24,6 +26,7 @@ export default function App() {
       <main className="content">
         {tab === 'ask' && <AskView />}
         {tab === 'search' && <SearchView />}
+        {tab === 'analytics' && <AnalyticsView />}
         {tab === 'sync' && <SyncView />}
       </main>
     </div>
