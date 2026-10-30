@@ -65,7 +65,7 @@ async def get_related_documents(
 
 _DOC_EMBEDDINGS_SQL = text(f"""
     SELECT d.id, d.title, d.path, d.url, d.space_key, d.kind, d.updated_at,
-           AVG(c.embedding) AS emb
+           AVG(c.embedding)::text AS emb
     FROM chunks c JOIN documents d ON d.id = c.document_id
     WHERE {_PERM}
     GROUP BY d.id, d.title, d.path, d.url, d.space_key, d.kind, d.updated_at
@@ -99,7 +99,14 @@ async def get_clusters(
     if len(rows) < 2:
         return {"clusters": [], "total_documents": len(rows), "k": 0}
 
-    embeddings = np.array([list(r.emb) for r in rows], dtype=np.float32)
+    import json
+
+    def _parse_vec(raw):
+        if isinstance(raw, str):
+            return [float(x) for x in raw.strip('[]').split(',')]
+        return list(raw)
+
+    embeddings = np.array([_parse_vec(r.emb) for r in rows], dtype=np.float32)
     titles = [r.title for r in rows]
 
     n_clusters = k if k > 0 else max(2, min(int(math.sqrt(len(rows) / 2)), 20))
