@@ -48,7 +48,7 @@ API 문서: http://localhost:8001/docs
 | `CONFLUENCE_SPACES` | 수집 대상 공간 키, 쉼표 구분 |
 | `ATTACHMENT_EXTS`, `ATTACHMENT_MAX_MB`, `PDF_OCR` | 첨부 허용 확장자·크기 상한·스캔 PDF OCR 여부 |
 | `EMBEDDING_*`, `LLM_*` | OpenAI 호환 API(OpenAI, Ollama `/v1`, vLLM). `EMBEDDING_DIM` 을 바꾸면 전체 재색인 필요 |
-| `RERANK_PROVIDER` | `none`(RRF 순서 그대로) 또는 `local`(cross-encoder, `requirements-optional.txt` 설치) |
+| `RERANK_PROVIDER` | `none`(RRF 순서 그대로), `local`(cross-encoder, `requirements-optional.txt` 설치) 또는 `http`(외부 TEI 서버, `RERANK_API_URL`·`RERANK_API_KEY` 설정) |
 | `RERANK_MIN_SCORE`, `TOP_K_CANDIDATES`, `TOP_K_FINAL` | 미발견 판정 하한, 1차 후보 수, 최종 청크 수 |
 | `USER_ID_HEADER`, `USER_GROUPS_HEADER`, `DEV_USER_GROUPS` | SSO 프록시가 넣는 헤더 이름. 개발 중엔 `DEV_USER_GROUPS=*` 로 전체 열람 |
 
@@ -56,7 +56,7 @@ API 문서: http://localhost:8001/docs
 
 - 증분 동기화는 cron 으로 `./sync.sh --mode incremental` 을 30분마다, 전체 동기화(삭제 페이지 정리 포함)는 야간 1회 `--mode full` 을 권장한다. 단일 프로세스로 돌리려면 `--loop`. 예시는 `deploy/README.md`.
 - 임베딩 모델을 바꾸면 `db/run.sh --reset` 후 전체 동기화로 재색인한다.
-- `RERANK_PROVIDER=local` 은 torch 를 끌어오므로 서버에 CPU 2코어 이상이 필요하다. 느리면 `none` 으로 두고 운영하다가 붙인다.
+- `RERANK_PROVIDER=local` 은 torch 를 끌어오므로 서버에 CPU 2코어 이상이 필요하다. 느리면 `none` 으로 두고 운영하다가 붙인다. 별도 bge-reranker TEI 서버가 있다면 `http` 로 두고 `RERANK_API_URL` 만 가리키면 된다(torch 불필요).
 - 프론트는 개발 중 `localStorage.userId` / `userGroups` 를 헤더로 보낸다. 운영에서는 SSO 리버스 프록시가 같은 헤더를 넣어야 한다.
 
 ## 디렉터리
