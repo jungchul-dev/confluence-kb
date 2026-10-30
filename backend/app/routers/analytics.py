@@ -124,6 +124,14 @@ async def get_clusters(
         dists = [float(np.linalg.norm(embeddings[i] - km.cluster_centers_[cid])) for i in indices]
         sorted_pairs = sorted(zip(indices, dists), key=lambda x: x[1])
         rep_indices = [i for i, _ in sorted_pairs[:5]]
+        all_docs = [
+            {
+                "document_id": str(rows[i].id), "title": rows[i].title,
+                "path": rows[i].path, "url": rows[i].url, "space_key": rows[i].space_key,
+                "kind": rows[i].kind,
+            }
+            for i in indices
+        ]
         result.append({
             "cluster_id": cid,
             "doc_count": len(indices),
@@ -131,9 +139,11 @@ async def get_clusters(
                 {
                     "document_id": str(rows[i].id), "title": rows[i].title,
                     "path": rows[i].path, "url": rows[i].url, "space_key": rows[i].space_key,
+                    "kind": rows[i].kind,
                 }
                 for i in rep_indices
             ],
+            "all_docs": all_docs,
             "all_titles": [titles[i] for i in indices],
         })
 
