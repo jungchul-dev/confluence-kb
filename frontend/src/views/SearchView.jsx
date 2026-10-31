@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip, CircularProgress } from '@mui/material'
 import * as api from '../api'
 import { MONO_FONT, FONT_SIZES } from '../theme'
+import { KindChip, Breadcrumb } from '../components/shared'
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' }) : '')
 
@@ -9,9 +10,22 @@ const Placeholder = ({ children }) => (
   <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', fontSize: FONT_SIZES.md, textAlign: 'center', px: 2 }}>{children}</Box>
 )
 
-const KindChip = ({ kind }) => (
-  <Chip size="small" label={kind === 'attachment' ? '첨부' : '페이지'} color={kind === 'attachment' ? 'success' : 'primary'} variant="filled" sx={{ flexShrink: 0 }} />
-)
+const Highlight = ({ text, query }) => {
+  const terms = query?.trim().split(/\s+/).filter((t) => t.length >= 2)
+  if (!terms?.length) return <>{text}</>
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const re = new RegExp(`(${escaped.join('|')})`, 'gi')
+  const parts = text.split(re)
+  return (
+    <>
+      {parts.map((part, i) =>
+        terms.some((t) => t.toLowerCase() === part.toLowerCase())
+          ? <Box key={i} component="mark" sx={{ backgroundColor: '#fef3c7', borderRadius: 0.5, px: 0.25, color: 'inherit' }}>{part}</Box>
+          : <React.Fragment key={i}>{part}</React.Fragment>
+      )}
+    </>
+  )
+}
 
 // 관련도: 리랭커가 none 이면 RRF 를 1위=1.0 으로 정규화한 값, 리랭커가 있으면 리랭커 점수. 0~1 을 % 막대로 보여준다
 const RelevanceBar = ({ score }) => {
@@ -145,11 +159,14 @@ export default function SearchView({ space }) {
                   <Typography variant="h6" noWrap sx={{ minWidth: 0 }}>{selected.title}</Typography>
                     <Link href={selected.url} target="_blank" rel="noreferrer" sx={{ ml: 'auto', flexShrink: 0, fontSize: FONT_SIZES.sm }}>열기</Link>
                 </Box>
-                <Typography sx={{ fontSize: FONT_SIZES.xs, mb: 1, color: 'text.secondary', flexShrink: 0 }}>
-                  {selected.path}{selected.heading ? ` › ${selected.heading}` : ''} · 수정 {fmtDate(selected.updated_at)}
-                </Typography>
+                <Box sx={{ mb: 1, flexShrink: 0 }}>
+                  <Breadcrumb path={selected.path} heading={selected.heading} />
+                  <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.disabled', mt: 0.25 }}>수정 {fmtDate(selected.updated_at)}</Typography>
+                </Box>
                 <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, pr: 0.5 }}>
-                  <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, backgroundColor: 'background.default', border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>{selected.content}</Box>
+                  <Box sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, fontSize: FONT_SIZES.sm, backgroundColor: 'background.default', border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, '& mark': { backgroundColor: '#fef3c7', borderRadius: 0.5, px: 0.25, color: 'inherit' } }}>
+                    <Highlight text={selected.content} query={q} />
+                  </Box>
                   <Box sx={{ mt: 1.5 }}>
                     <Typography sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       유사 문서 <Typography component="span" sx={{ fontSize: FONT_SIZES.sm, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'text.disabled' }}>(전체 공간에서 검색)</Typography>
@@ -174,7 +191,12 @@ export default function SearchView({ space }) {
                               <KindChip kind={d.kind} />
                               <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{d.title}</Typography>
                               <Tooltip title={`코사인 유사도 ${d.score.toFixed(3)}`}>
-                                <Typography sx={{ ml: 'auto', fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary', flexShrink: 0 }}>유사도 {Math.round(d.score * 100)}%</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto', flexShrink: 0 }}>
+                                  <Box sx={{ width: 50, height: 4, borderRadius: 2, backgroundColor: 'action.hover', overflow: 'hidden' }}>
+                                    <Box sx={{ width: `${Math.round(d.score * 100)}%`, height: '100%', backgroundColor: d.score >= 0.7 ? 'success.main' : d.score >= 0.4 ? 'warning.main' : 'text.disabled' }} />
+                                  </Box>
+                                  <Typography sx={{ fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{Math.round(d.score * 100)}%</Typography>
+                                </Box>
                               </Tooltip>
                             </Box>
                             <Typography noWrap sx={{ fontSize: FONT_SIZES.xs, mt: 0.5, color: 'text.secondary' }}>
