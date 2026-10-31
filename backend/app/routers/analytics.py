@@ -1,5 +1,4 @@
 """분석 — 유사 문서 추천과 주제 클러스터링. 임베딩을 검색 외 용도로 활용한다."""
-import asyncio
 import hashlib
 import logging
 import math
@@ -123,9 +122,13 @@ async def _cluster_keywords(db: AsyncSession, doc_ids: List[str], total: int, co
 
 
 _LABEL_SYSTEM = """당신은 사내 문서 모음에 짧은 제목을 붙이는 사서입니다.
-주어진 문서 묶음(클러스터)의 대표 문서 제목과 특징 단어를 보고, 이 묶음이 무엇에 관한 문서들인지 한국어 명사구로 제목을 짓습니다.
-규칙: 6단어 이내, 따옴표·마침표·설명 없이 제목만 출력, 특정 문서 하나의 제목을 그대로 쓰지 말고 묶음 전체를 아우를 것,
-특징 단어는 형태소 조각이라 불완전할 수 있으니 문맥으로 원래 단어를 추정할 것."""
+여러 클러스터가 한 번에 주어집니다. 각 클러스터의 대표 문서 제목과 특징 단어를 보고, 그 묶음이 무엇에 관한 문서들인지 한국어 명사구로 제목을 짓습니다.
+규칙:
+- 각 제목 6단어 이내, 따옴표·마침표·설명 없이 제목만 출력
+- 특정 문서 하나의 제목을 그대로 쓰지 말고 묶음 전체를 아우를 것
+- 특징 단어는 형태소 조각이라 불완전할 수 있으니 문맥으로 원래 단어를 추정할 것
+- 여러 클러스터가 비슷한 주제라면 서로 구별되는 차이(대상·시기·목적 등)를 제목에 반영할 것
+- 출력 형식: "클러스터번호: 제목" 을 한 줄씩, 클러스터 번호순으로."""
 _label_cache: dict = {}  # 문서 id 집합 해시 → 제목 (프로세스 수명 동안 유지, 같은 구성이면 재호출 없음)
 
 
@@ -133,21 +136,32 @@ def _strip_attachment_suffix(title: str) -> str:
     return re.sub(r"\s*—\s*.*$", "", title)
 
 
-async def _llm_label(doc_ids: List[str], titles: List[str], keywords: List[str], doc_count: int) -> Optional[str]:
-    key = hashlib.sha1("|".join(sorted(doc_ids)).encode()).hexdigest()
+async def _llm_labels(clusters_info: List[dict]) -> dict:
+    """clusters_info 요소: { cluster_id, doc_count, keywords, titles }. 실패 시 빈 dict."""
+    if not clusters_info:
+        return {}
+    key = hashlib.sha1("|".join(f"{c['cluster_id']}:{c['doc_count']}" for c in clusters_info).encode()).hexdigest()
     if key in _label_cache:
         return _label_cache[key]
-    user = (f"문서 수: {doc_count}\n특징 단어: {', '.join(keywords)}\n대표 문서 제목:\n" + "\n".join(f"- {t}" for t in titles) + "\n\n제목:")
+    parts = []
+    for c in clusters_info:
+        parts.append(f"[클러스터 {c['cluster_id']}] 문서 수: {c['doc_count']}\n특징 단어: {', '.join(c['keywords'])}\n대표 문서 제목:\n" + "\n".join(f"- {t}" for t in c['titles']))
+    user = "\n\n".join(parts) + "\n\n각 클러스터 제목:"
     try:
-        label = await answer_svc.chat(_LABEL_SYSTEM, user, temperature=0.1, max_tokens=60, timeout=25.0)
-        label = label.strip().strip('"\'「」').splitlines()[0][:60] if label else ""
+        out = await answer_svc.chat(_LABEL_SYSTEM, user, temperature=0.1, max_tokens=800, timeout=40.0, extra_body={"chat_template_kwargs": {"enable_thinking": False}})
     except Exception as e:  # noqa: BLE001
-        logger.warning("cluster label llm failed: %s", e)
-        return None
-    if not label:
-        return None
-    _label_cache[key] = label
-    return label
+        logger.warning("cluster labels llm failed: %s", e)
+        return {}
+    labels = {}
+    if out:
+        for line in out.splitlines():
+            m = re.match(r"\s*\[?클러스터\s*(\d+)\]?\s*[:：]\s*(.+)", line) or re.match(r"\s*(\d+)\s*[:：]\s*(.+)", line)
+            if m:
+                cid, label = int(m.group(1)), m.group(2).strip().strip('"\'「」')[:60]
+                if label:
+                    labels[cid] = label
+    _label_cache[key] = labels
+    return labels
 
 
 def _choose_k(x, requested: int, n: int) -> tuple:
@@ -227,7 +241,7 @@ async def get_clusters(
         return {"document_id": str(r.id), "title": r.title, "path": r.path, "url": r.url, "space_key": r.space_key, "kind": r.kind}
 
     result = []
-    label_jobs = []
+    clusters_info = []
     for cid, indices in sorted(clusters.items(), key=lambda t: -len(t[1])):
         center = km.cluster_centers_[cid]
         by_dist = sorted(indices, key=lambda i: float(np.linalg.norm(x[i] - center)))
@@ -256,14 +270,14 @@ async def get_clusters(
         })
         if llm:
             titles = [_strip_attachment_suffix(rows[i].title) for i in rep]
-            label_jobs.append(_llm_label(doc_ids, titles, keywords, len(indices)))
+            clusters_info.append({"cluster_id": cid, "doc_count": len(indices), "keywords": keywords, "titles": titles})
 
-    if label_jobs:
-        # 클러스터 수만큼 병렬 호출. 실패한 것은 키워드 제목을 유지한다
-        labels = await asyncio.gather(*label_jobs, return_exceptions=True)
-        for item, label in zip(result, labels):
-            if isinstance(label, str) and label:
-                item["label"], item["label_source"] = label, "llm"
+    if clusters_info:
+        labels = await _llm_labels(clusters_info)
+        for item in result:
+            cid = item["cluster_id"]
+            if cid in labels and labels[cid]:
+                item["label"], item["label_source"] = labels[cid], "llm"
 
     return {
         "clusters": result, "total_documents": n, "k": n_clusters,
