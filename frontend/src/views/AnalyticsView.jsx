@@ -23,7 +23,7 @@ const textColorFor = (hex) => {
   return luminance > 0.55 ? '#18181b' : '#ffffff'
 }
 
-export default function AnalyticsView() {
+export default function AnalyticsView({ space }) {
   const [clusters, setClusters] = useState([])
   const [totalDocs, setTotalDocs] = useState(0)
   const [info, setInfo] = useState(null) // { silhouette, docs_without_embedding, k_candidates }
@@ -34,12 +34,13 @@ export default function AnalyticsView() {
   const [page, setPage] = useState(1)
 
   useEffect(() => { setPage(1) }, [selected])
+  useEffect(() => { setClusters([]); setTotalDocs(0); setInfo(null); setSelected(null); setPage(1); setError(''); setK(0) }, [space])
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     setClusters([]); setTotalDocs(0); setInfo(null); setSelected(null); setPage(1)
     try {
-      const data = await api.getClusters(k)
+      const data = await api.getClusters(k, space)
       setClusters(data.clusters); setTotalDocs(data.total_documents); setK(data.k)
       setInfo({ silhouette: data.silhouette, docs_without_embedding: data.docs_without_embedding, k_candidates: data.k_candidates || [] })
       setSelected(null)
@@ -48,7 +49,7 @@ export default function AnalyticsView() {
     } finally {
       setLoading(false)
     }
-  }, [k])
+  }, [k, space])
 
   const items = clusters.map((c, i) => {
     const color = CLUSTER_COLORS[i % CLUSTER_COLORS.length]
