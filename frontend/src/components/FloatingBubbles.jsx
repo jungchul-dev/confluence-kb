@@ -121,7 +121,6 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
               onMouseLeave={() => setHover(null)}
               onClick={() => onSelect?.(n)}
             >
-              {selected && <circle r={n.r * 1.15} fill="none" stroke={n.color} strokeWidth={3} opacity={0.35} />}
               <circle
                 r={n.r * (hovered ? 1.04 : 1) * (selected ? 1.06 : 1)}
                 fill={n.color}
