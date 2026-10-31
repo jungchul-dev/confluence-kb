@@ -32,16 +32,19 @@ export default function SourceList({ sources, cited }) {
                   <Chip size="small" label="미인용" variant="outlined" sx={{ ml: 'auto', flexShrink: 0, color: 'text.disabled', borderStyle: 'dashed', height: 22, fontSize: FONT_SIZES.xs }} />
                 </Tooltip>
               )}
+              {isCited && (
+                <Tooltip title={`관련도 ${s.score.toFixed(3)}`}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto', flexShrink: 0 }}>
+                    <Box sx={{ width: 60, height: 4, borderRadius: 2, backgroundColor: 'action.hover', overflow: 'hidden' }}>
+                      <Box sx={{ width: `${Math.round(s.score * 100)}%`, height: '100%', backgroundColor: s.score >= 0.7 ? '#16a34a' : s.score >= 0.4 ? '#d97706' : '#a1a1aa' }} />
+                    </Box>
+                    <Typography sx={{ fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{Math.round(s.score * 100)}%</Typography>
+                  </Box>
+                </Tooltip>
+              )}
             </Box>
             <Box sx={{ mt: 0.5 }}>
               <Breadcrumb path={s.path} dateStr={fmtDate(s.updated_at)} />
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-              <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>관련도</Typography>
-              <Box sx={{ width: 60, height: 4, borderRadius: 2, backgroundColor: 'action.hover', overflow: 'hidden' }}>
-                <Box sx={{ width: `${Math.round(s.score * 100)}%`, height: '100%', backgroundColor: s.score >= 0.7 ? 'success.main' : s.score >= 0.4 ? 'warning.main' : 'text.disabled' }} />
-              </Box>
-              <Typography sx={{ fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{Math.round(s.score * 100)}%</Typography>
             </Box>
           </Box>
         )
