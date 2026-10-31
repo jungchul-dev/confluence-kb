@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Typography, Chip, Tooltip } from '@mui/material'
 import { MONO_FONT, FONT_SIZES } from '../theme'
-import { KindChip, Breadcrumb } from './shared'
+import { KindChip, Breadcrumb } from './Common'
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' }) : '')
 
