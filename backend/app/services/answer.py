@@ -55,7 +55,7 @@ async def rewrite_query(question: str, history: Optional[List[dict]]) -> str:
         return question
     convo = "\n".join(f"{'사용자' if h['role'] == 'user' else '어시스턴트'}: {h['content'][:600]}" for h in hist)
     try:
-        out = await chat(REWRITE_PROMPT, f"이전 대화:\n{convo}\n\n마지막 질문: {question}\n\n검색용 질문:", temperature=0.1, max_tokens=120, timeout=20.0)
+        out = await chat(REWRITE_PROMPT, f"이전 대화:\n{convo}\n\n마지막 질문: {question}\n\n검색용 질문:", temperature=0.1, max_tokens=120, timeout=20.0, extra_body={"chat_template_kwargs": {"enable_thinking": False}})
         out = out.strip().strip('"\'').splitlines()[0].strip() if out else ""
         return out if 3 <= len(out) <= 500 else question
     except Exception as e:  # noqa: BLE001
@@ -63,14 +63,18 @@ async def rewrite_query(question: str, history: Optional[List[dict]]) -> str:
         return question
 
 
-async def chat(system: str, user: str, *, temperature: float = 0.1, max_tokens: int = 200, timeout: float = 30.0) -> str:
-    """범용 단발 호출 (답변 생성 외 용도: 클러스터 이름 짓기 등). 같은 OpenAI 호환 설정을 쓴다."""
+async def chat(system: str, user: str, *, temperature: float = 0.1, max_tokens: int = 200, timeout: float = 30.0, extra_body: Optional[dict] = None) -> str:
+    """범용 단발 호출 (답변 생성 외 용도: 클러스터 이름 짓기 등). 같은 OpenAI 호환 설정을 쓴다.
+    extra_body: vLLM 확장 파라미터. 예) {"chat_template_kwargs": {"enable_thinking": False}} 로 Qwen3 reasoning 끄기."""
     url = settings.llm_base_url.rstrip("/") + "/chat/completions"
+    payload = {
+        "model": settings.llm_model, "temperature": temperature, "max_tokens": max_tokens,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+    }
+    if extra_body:
+        payload.update(extra_body)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        res = await client.post(url, headers=_headers(), json={
-            "model": settings.llm_model, "temperature": temperature, "max_tokens": max_tokens,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        })
+        res = await client.post(url, headers=_headers(), json=payload)
         res.raise_for_status()
         return (res.json()["choices"][0]["message"]["content"] or "").strip()
 
