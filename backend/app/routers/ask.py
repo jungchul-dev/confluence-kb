@@ -31,6 +31,7 @@ class HistoryTurn(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     history: List[HistoryTurn] = Field(default_factory=list, description="이전 대화 (오래된 것부터). 서버가 ASK_HISTORY_TURNS 턴으로 자른다")
+    space_key: Optional[List[str]] = Field(None, description="특정 공간만 검색. 없으면 전체.")
 
 
 class SourceOut(BaseModel):
@@ -65,8 +66,8 @@ async def _log_query(user: CurrentUser, question: str, chunk_ids: List[uuid.UUID
         return row.id
 
 
-async def _retrieve(db: AsyncSession, search_query: str, user: CurrentUser):
-    candidates = await hybrid_search(db, search_query, user)
+async def _retrieve(db: AsyncSession, search_query: str, user: CurrentUser, space_keys: Optional[List[str]] = None):
+    candidates = await hybrid_search(db, search_query, user, space_keys=space_keys)
     top, passed = await rerank(search_query, candidates)
     docs, context = build_context(top)
     top_score = top[0].rerank_score if top else None
@@ -86,7 +87,7 @@ async def ask(
     # 이어지는 질문("그건 누가 승인해?")은 이전 대화를 반영한 독립 문장으로 바꿔 검색한다. 답변 프롬프트에는 원문 질문을 쓴다
     search_query = await answer_svc.rewrite_query(question, history) if history else question
     try:
-        top, passed, docs, context, top_score = await _retrieve(db, search_query, user)
+        top, passed, docs, context, top_score = await _retrieve(db, search_query, user, payload.space_key)
     except Exception as e:  # noqa: BLE001
         logger.error("retrieval failed: %s", e, exc_info=True)
         raise HTTPException(status_code=502, detail=f"검색 단계 실패: {e}")
