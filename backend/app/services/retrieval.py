@@ -46,11 +46,12 @@ _SELECT_COLS = """
 
 # 권한: 사용자 그룹과 교집합이 있거나 제한 없는 문서('*')
 _PERM = "(d.allowed_groups && CAST(:groups AS text[]) OR '*' = ANY(d.allowed_groups))"
+_SPACE = "d.space_key = ANY(CAST(:space_keys AS text[]))"
 
 _VECTOR_SQL = text(f"""
     SELECT {_SELECT_COLS}, 1 - (c.embedding <=> CAST(:qvec AS vector)) AS score
     FROM chunks c JOIN documents d ON d.id = c.document_id
-    WHERE {_PERM}
+    WHERE {_PERM} AND {_SPACE}
     ORDER BY c.embedding <=> CAST(:qvec AS vector)
     LIMIT :k
 """)
@@ -59,19 +60,16 @@ _KEYWORD_SQL = text(f"""
     SELECT {_SELECT_COLS}, ts_rank_cd(c.tsv, q) AS score
     FROM chunks c JOIN documents d ON d.id = c.document_id,
          websearch_to_tsquery('{TSV_CONFIG}', :q) q
-    WHERE c.tsv @@ q AND {_PERM}
+    WHERE c.tsv @@ q AND {_PERM} AND {_SPACE}
     ORDER BY score DESC
     LIMIT :k
 """)
 
-# OR 폴백: websearch_to_tsquery 는 단어를 AND 로 묶어서 단어가 많은 질문은 전부 포함한 청크가 없으면 0건이 된다.
-# AND 결과가 비면 '&' 를 '|' 로 바꾼 질의로 다시 찾는다. ts_rank_cd 는 더 많은 단어를 포함한 청크를 높게 매긴다.
-# 구문 검색('<->')과 제외('!')는 그대로 유지된다.
 _KEYWORD_OR_SQL = text(f"""
     SELECT {_SELECT_COLS}, ts_rank_cd(c.tsv, qq.q) AS score
     FROM chunks c JOIN documents d ON d.id = c.document_id,
          (SELECT CAST(replace(CAST(websearch_to_tsquery('{TSV_CONFIG}', :q) AS text), ' & ', ' | ') AS tsquery) AS q) qq
-    WHERE c.tsv @@ qq.q AND {_PERM}
+    WHERE c.tsv @@ qq.q AND {_PERM} AND {_SPACE}
     ORDER BY score DESC
     LIMIT :k
 """)
@@ -86,38 +84,46 @@ def _row_to_candidate(row) -> Candidate:
 
 
 async def hybrid_search(
-    db: AsyncSession, question: str, user: CurrentUser, *, k: Optional[int] = None, rrf_k: int = 60,
+    db: AsyncSession, question: str, user: CurrentUser, *, k: Optional[int] = None, rrf_k: int = 60, space_keys: Optional[List[str]] = None,
 ) -> List[Candidate]:
-    """벡터·키워드 각각 k 개를 받아 RRF(1/(rrf_k+rank))로 합친 뒤 점수순으로 돌려준다 (최대 k 개)."""
+    """벡터·키워드 각각 k 개를 받아 RRF(1/(rrf_k+rank))로 합친 뒤 점수순으로 돌려준다 (최대 k 개). space_keys 가 있으면 해당 공간만."""
     k = k or settings.top_k_candidates
     qvec = await embed_query(question)
     vec_param = "[" + ",".join(f"{v:.7f}" for v in qvec) + "]"
 
+    vector_sql = str(_VECTOR_SQL)
+    keyword_sql = str(_KEYWORD_SQL)
+    keyword_or_sql = str(_KEYWORD_OR_SQL)
     if user.sees_everything or settings.skip_space_permissions:
-        # 관리자·개발 모드 또는 권한 체크 비활성화: 권한 조건을 빼고 전체를 검색한다
-        vector_sql = text(str(_VECTOR_SQL).replace(_PERM, "TRUE"))
-        keyword_sql = text(str(_KEYWORD_SQL).replace(_PERM, "TRUE"))
-        keyword_or_sql = text(str(_KEYWORD_OR_SQL).replace(_PERM, "TRUE"))
-        params_v = {"qvec": vec_param, "k": k}
-        params_k = {"q": question, "k": k}
-    else:
-        vector_sql, keyword_sql, keyword_or_sql = _VECTOR_SQL, _KEYWORD_SQL, _KEYWORD_OR_SQL
-        params_v = {"qvec": vec_param, "k": k, "groups": user.groups}
-        params_k = {"q": question, "k": k, "groups": user.groups}
+        vector_sql = vector_sql.replace(_PERM, "TRUE")
+        keyword_sql = keyword_sql.replace(_PERM, "TRUE")
+        keyword_or_sql = keyword_or_sql.replace(_PERM, "TRUE")
+    if not space_keys:
+        vector_sql = vector_sql.replace(_SPACE, "TRUE")
+        keyword_sql = keyword_sql.replace(_SPACE, "TRUE")
+        keyword_or_sql = keyword_or_sql.replace(_SPACE, "TRUE")
+
+    params_v = {"qvec": vec_param, "k": k}
+    params_k = {"q": question, "k": k}
+    if not (user.sees_everything or settings.skip_space_permissions):
+        params_v["groups"] = user.groups
+        params_k["groups"] = user.groups
+    if space_keys:
+        params_v["space_keys"] = space_keys
+        params_k["space_keys"] = space_keys
 
     merged: Dict[uuid.UUID, Candidate] = {}
 
-    vres = await db.execute(vector_sql, params_v)
+    vres = await db.execute(text(vector_sql), params_v)
     for rank, row in enumerate(vres.fetchall(), start=1):
         c = merged.setdefault(row.chunk_id, _row_to_candidate(row))
         c.vector_rank = rank
         c.sources.append("vector")
         c.rrf_score += 1.0 / (rrf_k + rank)
 
-    krows = (await db.execute(keyword_sql, params_k)).fetchall()
+    krows = (await db.execute(text(keyword_sql), params_k)).fetchall()
     if not krows:
-        # AND 로 한 건도 없으면 OR 로 폴백 (단어가 많은 자연어 질문에서 흔하다)
-        krows = (await db.execute(keyword_or_sql, params_k)).fetchall()
+        krows = (await db.execute(text(keyword_or_sql), params_k)).fetchall()
     for rank, row in enumerate(krows, start=1):
         c = merged.setdefault(row.chunk_id, _row_to_candidate(row))
         c.keyword_rank = rank
