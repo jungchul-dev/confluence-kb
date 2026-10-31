@@ -71,10 +71,15 @@ export default function App() {
             <Typography noWrap sx={{ fontWeight: 600, fontSize: '1rem', letterSpacing: '-0.01em' }}>{VIEW_TITLES[tab]}</Typography>
             {showSpaceFilter && (
               <FormControl size="small" sx={{ minWidth: 200 }}>
-                <Select multiple value={space} onChange={(e) => setSpace(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)} displayEmpty renderValue={() => spaceLabel} MenuProps={{ PaperProps: { sx: { maxHeight: 400 } } }}>
+                <Select multiple value={space} onChange={(e) => { const v = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value; if (v.includes('__all__')) { setSpace(space.length === spaces.length ? [] : spaces.map((s) => s.space_key)); return } setSpace(v) }} displayEmpty renderValue={() => spaceLabel} MenuProps={{ PaperProps: { sx: { maxHeight: 400 } } }}>
+                  <MenuItem value="__all__" sx={{ py: 0.5 }}>
+                    <Checkbox checked={space.length === spaces.length} indeterminate={space.length > 0 && space.length < spaces.length} size="small" />
+                    <Typography sx={{ fontSize: '0.875rem', fontWeight: 600 }}>모두 선택</Typography>
+                  </MenuItem>
+                  <Divider sx={{ my: 0.5 }} />
                   {spacesLoading && <MenuItem disabled><CircularProgress size={16} sx={{ mr: 1 }} /> 불러오는 중…</MenuItem>}
                   {spaces.map((s) => (
-                    <MenuItem key={s.space_key} value={s.space_key}>
+                    <MenuItem key={s.space_key} value={s.space_key} sx={{ py: 0.5 }}>
                       <Checkbox checked={space.indexOf(s.space_key) > -1} size="small" />
                       <Typography sx={{ fontSize: '0.875rem' }}>{s.space_key} ({s.doc_count})</Typography>
                     </MenuItem>
