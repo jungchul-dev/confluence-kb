@@ -3,6 +3,14 @@ import { createTheme } from '@mui/material/styles';
 const FONT_FAMILY = '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif';
 export const MONO_FONT = '"JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace';
 
+export const FONT_SIZES = {
+  xs: '0.75rem',    // 12px — 경로, 라벨, 코드, 관련도
+  sm: '0.8125rem',  // 13px — 보조 텍스트, 메타정보, 툴팁, 캡션
+  md: '0.875rem',   // 14px — 메뉴, 셀렉트박스, placeholder, 본문 보조
+  lg: '0.9375rem', // 15px — 본문, 답변, 사용자 질문
+  xl: '1rem',      // 16px — 페이지 제목, 헤딩
+};
+
 const light = {
   primary: { main: '#2563eb', contrastText: '#ffffff' },
   background: { default: '#f4f4f5', paper: '#ffffff' },
