@@ -33,6 +33,12 @@ def _run_dict(r: SyncRun) -> dict:
     }
 
 
+@router.get("/spaces")
+async def list_spaces(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(Document.space_key, func.count()).group_by(Document.space_key).order_by(Document.space_key))).all()
+    return [{"space_key": r[0], "doc_count": r[1]} for r in rows]
+
+
 @router.get("/sync/status")
 async def sync_status(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """공간별 문서 수·마지막 동기화·실패 건수 + 최근 실행 20건."""
