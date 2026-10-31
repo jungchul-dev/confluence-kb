@@ -3,6 +3,7 @@ import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tool
 import { HelpOutlined as HelpIcon, Close as CloseIcon } from '@mui/icons-material'
 import FloatingBubbles from '../components/FloatingBubbles'
 import FloatingDots from '../components/FloatingDots'
+import { KindChip, Breadcrumb } from '../components/shared'
 import * as api from '../api'
 import { FONT_SIZES } from '../theme'
 
@@ -169,12 +170,12 @@ export default function AnalyticsView({ space }) {
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-                      <Chip size="small" label={d.kind === 'attachment' ? '첨부' : '페이지'} color={d.kind === 'attachment' ? 'success' : 'primary'} variant="filled" sx={{ flexShrink: 0 }} />
+                      <KindChip kind={d.kind} />
                       <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{d.title}</Typography>
                     </Box>
-                    <Typography noWrap sx={{ fontSize: FONT_SIZES.xs, mt: 0.5, color: 'text.secondary' }}>
-                      {d.path}{d.space_key ? ` · ${d.space_key}` : ''}
-                    </Typography>
+                    <Box sx={{ mt: 0.5 }}>
+                      <Breadcrumb path={d.path} spaceKey={d.space_key} />
+                    </Box>
                   </Box>
                 ))}
               </Box>
