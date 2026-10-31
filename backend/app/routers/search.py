@@ -26,7 +26,16 @@ async def search(
 ):
     space_keys = [s.strip() for s in space_key.split(",") if s.strip()] if space_key else None
     candidates = await hybrid_search(db, q, user, space_keys=space_keys)
-    top, passed = await rerank(q, candidates, top_k=k)
+    top, passed = await rerank(q, candidates, top_k=max(k * 3, k))
+    seen_docs = set()
+    deduped = []
+    for c in top:
+        if c.document_id in seen_docs:
+            continue
+        seen_docs.add(c.document_id)
+        deduped.append(c)
+        if len(deduped) >= k:
+            break
     return {
         "passed": passed,
         "results": [
@@ -37,7 +46,7 @@ async def search(
                 "vector_rank": c.vector_rank, "keyword_rank": c.keyword_rank,
                 "rrf_score": round(c.rrf_score, 6), "rerank_score": None if c.rerank_score is None else round(c.rerank_score, 4),
             }
-            for c in top
+            for c in deduped
         ],
     }
 
