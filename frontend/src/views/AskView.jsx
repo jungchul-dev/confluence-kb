@@ -1,10 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Alert, Tooltip } from '@mui/material'
+import { Box, Typography, TextField, Button, Card, Alert, Tooltip, CircularProgress } from '@mui/material'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import * as api from '../api'
 import SourceList from '../components/SourceList'
 import { FONT_SIZES } from '../theme'
+
+function useDots(active) {
+  const [dots, setDots] = useState('')
+  useEffect(() => {
+    if (!active) { setDots(''); return undefined }
+    const t = setInterval(() => setDots((d) => d.length >= 3 ? '' : d + '.'), 500)
+    return () => clearInterval(t)
+  }, [active])
+  return dots
+}
 
 const Placeholder = ({ children }) => (
   <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', fontSize: FONT_SIZES.md, textAlign: 'center', px: 2 }}>{children}</Box>
@@ -12,6 +22,7 @@ const Placeholder = ({ children }) => (
 
 // 대화 한 턴. turn = { role: 'user'|'assistant', content, sources?, found?, top_score?, search_query?, latency_ms?, error? }
 const Turn = ({ turn, running, selected, onSelect }) => {
+  const dots = useDots(running)
   if (turn.role === 'user') {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
@@ -39,11 +50,11 @@ const Turn = ({ turn, running, selected, onSelect }) => {
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.content}</ReactMarkdown>
           </Box>
         )
-        : running && <Typography sx={{ color: 'text.secondary' }}>생성 중…</Typography>}
+        : running && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}><CircularProgress size={14} /><Typography>생성 중{dots}</Typography></Box>}
       {turn.error && <Alert severity="error" sx={{ mt: 1 }}>{turn.error}</Alert>}
       {(!running || turn.content) && (
         <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.secondary', mt: 0.75 }}>
-          {running ? '생성 중…' : (turn.latency_ms != null ? `${(turn.latency_ms / 1000).toFixed(1)}s` : '')}
+          {running ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}><CircularProgress size={12} />생성 중{dots}</Box> : (turn.latency_ms != null ? `${(turn.latency_ms / 1000).toFixed(1)}s` : '')}
           {!running && turn.sources?.length > 0 && ` · 출처 ${turn.sources.length}건`}
           {turn.found === false && ' · 관련 문서를 찾지 못함'}
         </Typography>
@@ -57,6 +68,7 @@ export default function AskView({ space }) {
   const [turns, setTurns] = useState([])          // 대화 전체 (서버에는 이전 턴을 history 로 보낸다)
   const [selected, setSelected] = useState(null)  // 출처를 보여줄 답변 턴의 index (기본: 마지막)
   const [running, setRunning] = useState(false)
+  const sourceDots = useDots(running)
   const [error, setError] = useState('')
   const abortRef = useRef(null)
   const listRef = useRef(null)
@@ -177,7 +189,9 @@ export default function AskView({ space }) {
                 <SourceList sources={current.sources} cited={citedOf(current)} />
               </Box>
             )
-            : <Placeholder>{running ? '출처를 찾는 중…' : '답변에 사용된 문서가 여기에 표시됩니다.'}</Placeholder>}
+            : running
+              ? <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', fontSize: FONT_SIZES.md, gap: 1 }}><CircularProgress size={16} />출처를 찾는 중{sourceDots}</Box>
+              : <Placeholder>답변에 사용된 문서가 여기에 표시됩니다.</Placeholder>}
         </Card>
       </Box>
     </Box>
