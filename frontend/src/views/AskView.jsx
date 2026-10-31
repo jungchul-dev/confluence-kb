@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Alert, Tooltip, CircularProgress } from '@mui/material'
+import { Box, Typography, TextField, Button, Card, Alert, Tooltip, CircularProgress, IconButton } from '@mui/material'
+import { KeyboardArrowDown as DownIcon, KeyboardArrowUp as UpIcon } from '@mui/icons-material'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import * as api from '../api'
@@ -21,7 +22,7 @@ const Placeholder = ({ children }) => (
 )
 
 // 대화 한 턴. turn = { role: 'user'|'assistant', content, sources?, found?, top_score?, search_query?, latency_ms?, error? }
-const Turn = ({ turn, running, selected, onSelect }) => {
+const Turn = ({ turn, running, selected, onSelect, collapsed, onToggle }) => {
   const dots = useDots(running)
   if (turn.role === 'user') {
     return (
@@ -44,20 +45,32 @@ const Turn = ({ turn, running, selected, onSelect }) => {
           <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.secondary', mb: 0.5 }}>검색: {turn.search_query}</Typography>
         </Tooltip>
       )}
-      {turn.content
+      {!collapsed && turn.content
         ? (
           <Box sx={{ lineHeight: 1.7, fontSize: FONT_SIZES.lg, '& > :first-of-type': { mt: 0 }, '& > :last-child': { mb: 0 } }}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.content}</ReactMarkdown>
           </Box>
         )
-        : running && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}><CircularProgress size={14} /><Typography>생성 중{dots}</Typography></Box>}
+        : !collapsed && running && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}><CircularProgress size={14} /><Typography>생성 중{dots}</Typography></Box>}
+      {collapsed && turn.content && (
+        <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {turn.content.replace(/[#*`_\[\]]/g, '').slice(0, 100)}
+        </Typography>
+      )}
       {turn.error && <Alert severity="error" sx={{ mt: 1 }}>{turn.error}</Alert>}
       {(!running || turn.content) && (
-        <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.secondary', mt: 0.75 }}>
-          {running ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}><CircularProgress size={12} />생성 중{dots}</Box> : (turn.latency_ms != null ? `${(turn.latency_ms / 1000).toFixed(1)}s` : '')}
-          {!running && turn.sources?.length > 0 && ` · 출처 ${turn.sources.length}건`}
-          {turn.found === false && ' · 관련 문서를 찾지 못함'}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
+          <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.secondary' }}>
+            {running ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}><CircularProgress size={12} />생성 중{dots}</Box> : (turn.latency_ms != null ? `${(turn.latency_ms / 1000).toFixed(1)}s` : '')}
+            {!running && turn.sources?.length > 0 && ` · 출처 ${turn.sources.length}건`}
+            {turn.found === false && ' · 관련 문서를 찾지 못함'}
+          </Typography>
+          {turn.content && !running && (
+            <IconButton size="small" onClick={(e) => { e.stopPropagation(); onToggle() }} sx={{ p: 0.25 }}>
+              {collapsed ? <DownIcon fontSize="small" /> : <UpIcon fontSize="small" />}
+            </IconButton>
+          )}
+        </Box>
       )}
     </Box>
   )
@@ -70,10 +83,11 @@ export default function AskView({ space }) {
   const [running, setRunning] = useState(false)
   const sourceDots = useDots(running)
   const [error, setError] = useState('')
+  const [collapsed, setCollapsed] = useState(new Set())  // 접힌 답변 턴 index 집합
   const abortRef = useRef(null)
   const listRef = useRef(null)
 
-  useEffect(() => { abortRef.current?.abort(); setTurns([]); setSelected(null); setError('') }, [space])
+  useEffect(() => { abortRef.current?.abort(); setTurns([]); setSelected(null); setError(''); setCollapsed(new Set()) }, [space])
 
   // 새 조각이 올 때마다 대화 목록을 아래로 붙인다
   useEffect(() => {
@@ -116,7 +130,13 @@ export default function AskView({ space }) {
     }
   }
 
-  const reset = () => { abortRef.current?.abort(); setTurns([]); setSelected(null); setError('') }
+  const reset = () => { abortRef.current?.abort(); setTurns([]); setSelected(null); setError(''); setCollapsed(new Set()) }
+
+  const toggleCollapse = (i) => setCollapsed((prev) => {
+    const next = new Set(prev)
+    if (next.has(i)) next.delete(i); else next.add(i)
+    return next
+  })
 
   // 답변 본문에 실제로 인용된 [n] 번호. 출처 목록에서 인용되지 않은 문서를 구분해 보여준다
   const citedOf = (turn) => {
@@ -170,6 +190,8 @@ export default function AskView({ space }) {
                     running={running && i === turns.length - 1}
                     selected={t.role === 'assistant' && (selected != null ? selected === i : i === turns.length - 1)}
                     onSelect={t.role === 'assistant' ? () => setSelected(i) : undefined}
+                    collapsed={collapsed.has(i)}
+                    onToggle={() => toggleCollapse(i)}
                   />
                 ))}
               </Box>
