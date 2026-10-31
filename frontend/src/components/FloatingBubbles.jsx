@@ -23,6 +23,12 @@ const wrapText = (text, fs, maxWidth, maxLines) => {
   return lines
 }
 
+// 원이 커지는 배율. 가두는 여백(bound)은 둘 다 적용됐을 때(선택된 원에 오버)를 기준으로 잡아야 잘리지 않는다
+const HOVER_SCALE = 1.04
+const SELECT_SCALE = 1.06
+const MAX_SCALE = HOVER_SCALE * SELECT_SCALE
+const EDGE_PAD = 4 // 선택 테두리(2px) 절반 + 여유
+
 /**
  * 떠다니는 버블 차트. items: [{ id, label, count, color, textColor, tooltip }]
  * - 원 크기는 count 에 비례(면적 기준), 전체가 컨테이너의 약 절반을 차지하도록 맞춘다
@@ -81,9 +87,9 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
         n.vy += Math.sin(t * n.speed * 0.8 + n.phase * 1.7) * 0.06
       })
     }
-    const bound = () => { // 화면 밖으로 나가지 않게. 오버 시 커지는 몫(4%)과 테두리 두께만큼 여유를 둔다
+    const bound = () => { // 화면 밖으로 나가지 않게. 선택 + 오버로 가장 크게 커졌을 때(약 10%)와 테두리 두께만큼 여유를 둔다
       ns.forEach((n) => {
-        const pad = n.r * 0.05 + 6
+        const pad = n.r * (MAX_SCALE - 1) + EDGE_PAD
         n.x = Math.max(n.r + pad, Math.min(w - n.r - pad, n.x))
         n.y = Math.max(n.r + pad, Math.min(h - n.r - pad, n.y))
       })
@@ -123,7 +129,7 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
               onClick={() => onSelect?.(n)}
             >
               <circle
-                r={n.r * (hovered ? 1.04 : 1) * (selected ? 1.06 : 1)}
+                r={n.r * (hovered ? HOVER_SCALE : 1) * (selected ? SELECT_SCALE : 1)}
                 fill={n.color}
                 stroke={selected ? '#18181b' : 'rgba(0,0,0,0.25)'}
                 strokeWidth={selected ? 2 : 1}
