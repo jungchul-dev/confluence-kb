@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip, CircularProgress } from '@mui/material'
 import * as api from '../api'
 import { MONO_FONT, FONT_SIZES } from '../theme'
-import { KindChip, Breadcrumb } from '../components/shared'
+import { KindChip, Breadcrumb } from '../components/Common'
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' }) : '')
 
