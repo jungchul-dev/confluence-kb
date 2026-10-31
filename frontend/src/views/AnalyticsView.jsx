@@ -174,7 +174,7 @@ export default function AnalyticsView({ space }) {
                       <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{d.title}</Typography>
                     </Box>
                     <Box sx={{ mt: 0.5 }}>
-                      <Breadcrumb path={d.path} spaceKey={d.space_key} />
+                      <Breadcrumb path={d.path} />
                     </Box>
                   </Box>
                 ))}
