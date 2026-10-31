@@ -72,7 +72,7 @@ export default function SearchView({ space }) {
   const submit = async (e) => {
     e?.preventDefault()
     if (!q.trim() || loading) return
-    setLoading(true); setError(''); setSelected(null); setRelated({}); setPassed(true)
+    setLoading(true); setError(''); setSelected(null); setRelated({}); setPassed(true); setResults([])
     try {
       const data = await api.search(q.trim(), 20, space)
       setResults(data.results); setPassed(data.passed); setSearched(true)
@@ -110,7 +110,7 @@ export default function SearchView({ space }) {
         <Card variant="outlined" sx={{ p: 2, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Typography variant="h6" sx={{ mb: 1, flexShrink: 0 }}>
             검색 결과
-            {searched && passed && <Typography component="span" color="text.secondary"> · {results.length}건</Typography>}
+            {searched && passed && results.length > 0 && <Typography component="span" color="text.secondary"> · {results.length}건</Typography>}
           </Typography>
           {loading
             ? <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', gap: 1 }}><CircularProgress size={20} />검색 중</Box>
