@@ -32,29 +32,30 @@ const RelevanceBar = ({ score }) => {
   const pct = score == null ? null : Math.max(0, Math.min(100, Math.round(score * 100)))
   return (
     <Tooltip title={score == null ? '점수 없음' : `관련도 ${score.toFixed(3)} (리랭커 점수, 리랭커가 없으면 RRF 정규화 점수)`}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
-        <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>관련도</Typography>
-        <Box sx={{ width: 90, height: 6, borderRadius: 3, backgroundColor: 'action.hover', overflow: 'hidden' }}>
-          <Box sx={{ width: `${pct ?? 0}%`, height: '100%', backgroundColor: pct == null ? 'transparent' : pct >= 70 ? 'success.main' : pct >= 40 ? 'warning.main' : 'text.disabled' }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+        <Box sx={{ width: 60, height: 4, borderRadius: 2, backgroundColor: 'action.hover', overflow: 'hidden' }}>
+          <Box sx={{ width: `${pct ?? 0}%`, height: '100%', backgroundColor: pct == null ? 'transparent' : pct >= 70 ? '#16a34a' : pct >= 40 ? '#d97706' : '#a1a1aa' }} />
         </Box>
-        <Typography sx={{ fontSize: FONT_SIZES.xs, fontFamily: MONO_FONT, width: 36, textAlign: 'right' }}>{pct == null ? '-' : `${pct}%`}</Typography>
+        <Typography sx={{ fontSize: FONT_SIZES.xs, fontFamily: MONO_FONT, color: 'text.secondary' }}>{pct == null ? '-' : `${pct}%`}</Typography>
       </Box>
     </Tooltip>
   )
 }
 
 // 순위 배지: 양쪽 검색에 모두 걸린 결과는 진한 색, 한쪽만이면 회색, 안 걸린 쪽은 '없음'
-const RankBadge = ({ label, rank, both, tip }) => (
-  <Tooltip title={rank == null ? `${label} 검색 상위 후보에 없음` : `${tip} — ${rank}위`}>
-    <Chip
-      size="small"
-      variant={rank == null ? 'outlined' : 'filled'}
-      color={rank == null ? 'default' : both ? 'primary' : 'default'}
-      label={rank == null ? `${label} 없음` : `${label} ${rank}위`}
-      sx={{ fontSize: FONT_SIZES.xs, height: 22, flexShrink: 0, ...(rank == null ? { color: 'text.disabled', borderStyle: 'dashed' } : {}) }}
-    />
-  </Tooltip>
-)
+const RankBadge = ({ label, rank, both, tip }) => {
+  const c = rank == null ? null : both ? '#16a34a' : '#71717a'
+  return (
+    <Tooltip title={rank == null ? `${label} 검색 상위 후보에 없음` : `${tip} — ${rank}위`}>
+      <Chip
+        size="small"
+        variant={rank == null ? 'outlined' : 'filled'}
+        label={rank == null ? `${label} 없음` : `${label} ${rank}위`}
+        sx={{ fontSize: FONT_SIZES.xs, height: 22, flexShrink: 0, ...(rank == null ? { color: 'text.disabled', borderStyle: 'dashed' } : { backgroundColor: c, color: '#fff' }) }}
+      />
+    </Tooltip>
+  )
+}
 
 export default function SearchView({ space }) {
   const [q, setQ] = useState('')
@@ -71,10 +72,10 @@ export default function SearchView({ space }) {
   const submit = async (e) => {
     e?.preventDefault()
     if (!q.trim() || loading) return
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setSelected(null); setRelated({})
     try {
       const data = await api.search(q.trim(), 20, space)
-      setResults(data.results); setPassed(data.passed); setSelected(null); setRelated({}); setSearched(true)
+      setResults(data.results); setPassed(data.passed); setSearched(true)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -132,15 +133,15 @@ export default function SearchView({ space }) {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
                         <KindChip kind={r.kind} />
                         <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{r.title}</Typography>
+                        <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                          <RankBadge label="의미" rank={r.vector_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="임베딩(벡터) 검색 순위. 검색어와 뜻이 비슷한 순서" />
+                          <RankBadge label="키워드" rank={r.keyword_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="키워드(형태소) 검색 순위. 검색어 단어가 실제로 들어 있는 순서" />
+                          <RelevanceBar score={r.rerank_score} />
+                        </Box>
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75, minWidth: 0 }}>
-                        <RelevanceBar score={r.rerank_score} />
-                        <RankBadge label="의미" rank={r.vector_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="임베딩(벡터) 검색 순위. 검색어와 뜻이 비슷한 순서" />
-                        <RankBadge label="키워드" rank={r.keyword_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="키워드(형태소) 검색 순위. 검색어 단어가 실제로 들어 있는 순서" />
+                      <Box sx={{ mt: 0.5 }}>
+                        <Breadcrumb path={r.path} heading={r.heading} dateStr={fmtDate(r.updated_at)} />
                       </Box>
-                      <Typography noWrap sx={{ fontSize: FONT_SIZES.xs, mt: 0.5, color: 'text.secondary' }}>
-                        {r.path}{r.heading ? ` › ${r.heading}` : ''} · 수정 {fmtDate(r.updated_at)}
-                      </Typography>
                     </Box>
                   )
                 })}
@@ -160,8 +161,7 @@ export default function SearchView({ space }) {
                     <Link href={selected.url} target="_blank" rel="noreferrer" sx={{ ml: 'auto', flexShrink: 0, fontSize: FONT_SIZES.sm }}>열기</Link>
                 </Box>
                 <Box sx={{ mb: 1, flexShrink: 0 }}>
-                  <Breadcrumb path={selected.path} heading={selected.heading} />
-                  <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.disabled', mt: 0.25 }}>수정 {fmtDate(selected.updated_at)}</Typography>
+                  <Breadcrumb path={selected.path} heading={selected.heading} dateStr={fmtDate(selected.updated_at)} />
                 </Box>
                 <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, pr: 0.5 }}>
                   <Box sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, fontSize: FONT_SIZES.sm, backgroundColor: 'background.default', border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, '& mark': { backgroundColor: '#fef3c7', borderRadius: 0.5, px: 0.25, color: 'inherit' } }}>
@@ -193,15 +193,15 @@ export default function SearchView({ space }) {
                               <Tooltip title={`코사인 유사도 ${d.score.toFixed(3)}`}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto', flexShrink: 0 }}>
                                   <Box sx={{ width: 50, height: 4, borderRadius: 2, backgroundColor: 'action.hover', overflow: 'hidden' }}>
-                                    <Box sx={{ width: `${Math.round(d.score * 100)}%`, height: '100%', backgroundColor: d.score >= 0.7 ? 'success.main' : d.score >= 0.4 ? 'warning.main' : 'text.disabled' }} />
+                                    <Box sx={{ width: `${Math.round(d.score * 100)}%`, height: '100%', backgroundColor: d.score >= 0.7 ? '#16a34a' : d.score >= 0.4 ? '#d97706' : '#a1a1aa' }} />
                                   </Box>
                                   <Typography sx={{ fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{Math.round(d.score * 100)}%</Typography>
                                 </Box>
                               </Tooltip>
                             </Box>
-                            <Typography noWrap sx={{ fontSize: FONT_SIZES.xs, mt: 0.5, color: 'text.secondary' }}>
-                              {d.path}{d.space_key ? ` · ${d.space_key}` : ''}{d.updated_at ? ` · 수정 ${fmtDate(d.updated_at)}` : ''}
-                            </Typography>
+                            <Box sx={{ mt: 0.5 }}>
+                              <Breadcrumb path={d.path} dateStr={d.updated_at ? fmtDate(d.updated_at) : ''} />
+                            </Box>
                           </Box>
                         ))
                         : <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.disabled' }}>유사 문서가 없습니다.</Typography>
