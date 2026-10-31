@@ -156,7 +156,7 @@ export default function AskView({ space }) {
 
       <Box component="form" sx={{ position: 'relative', mt: 2, flexShrink: 0 }} onSubmit={submit}>
         <TextField
-          multiline fullWidth rows={7}
+          multiline fullWidth rows={4}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) submit(e) }}
