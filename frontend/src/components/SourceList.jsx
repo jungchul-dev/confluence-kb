@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Typography, Chip, Tooltip } from '@mui/material'
-import { MONO_FONT } from '../theme'
+import { MONO_FONT, FONT_SIZES } from '../theme'
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' }) : '')
 
@@ -25,16 +25,16 @@ export default function SourceList({ sources, cited }) {
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-              <Box component="span" sx={{ fontFamily: MONO_FONT, fontSize: '0.75rem', color: 'text.secondary', flexShrink: 0 }}>[{s.index}]</Box>
+              <Box component="span" sx={{ fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary', flexShrink: 0 }}>[{s.index}]</Box>
               <Chip size="small" label={s.kind === 'attachment' ? '첨부' : '페이지'} color={s.kind === 'attachment' ? 'success' : 'primary'} variant="filled" sx={{ flexShrink: 0 }} />
               <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{s.title}</Typography>
               {!isCited && (
                 <Tooltip title="검색 후보에는 올랐지만 답변에 인용되지 않은 문서입니다">
-                  <Chip size="small" label="미인용" variant="outlined" sx={{ ml: 'auto', flexShrink: 0, color: 'text.disabled', borderStyle: 'dashed', height: 22, fontSize: '0.75rem' }} />
+                  <Chip size="small" label="미인용" variant="outlined" sx={{ ml: 'auto', flexShrink: 0, color: 'text.disabled', borderStyle: 'dashed', height: 22, fontSize: FONT_SIZES.xs }} />
                 </Tooltip>
               )}
             </Box>
-            <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
+            <Typography noWrap sx={{ fontSize: FONT_SIZES.xs, mt: 0.5, color: 'text.secondary' }}>
               {s.path} · 수정 {fmtDate(s.updated_at)} · 관련도 {Math.round(s.score * 100)}%
             </Typography>
           </Box>
