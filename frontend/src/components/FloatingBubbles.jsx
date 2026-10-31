@@ -125,7 +125,7 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
                 r={n.r * (hovered ? 1.04 : 1)}
                 fill={n.color}
                 stroke={selected ? '#18181b' : 'rgba(0,0,0,0.25)'}
-                strokeWidth={selected ? 4 : 2}
+                strokeWidth={2}
               />
               <text textAnchor="middle" dominantBaseline="central" fill={n.textColor} style={{ fontSize: fs, fontWeight: 700, pointerEvents: 'none', fontFamily: 'inherit' }}>
                 {lines.map((l, i) => (
