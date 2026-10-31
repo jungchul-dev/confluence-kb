@@ -122,7 +122,6 @@ export default function AnalyticsView({ space }) {
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <FloatingDots />
           </Box>
-          <Typography color="text.secondary" sx={{ textAlign: 'center', pb: 1 }}>분석 중…</Typography>
         </Box>
       )}
 
