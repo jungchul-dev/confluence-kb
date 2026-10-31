@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip } from '@mui/material'
+import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip, CircularProgress } from '@mui/material'
 import * as api from '../api'
 import { MONO_FONT, FONT_SIZES } from '../theme'
 
@@ -84,7 +84,7 @@ export default function SearchView({ space }) {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <Box component="form" sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2, flexShrink: 0 }} onSubmit={submit}>
         <TextField fullWidth size="small" value={q} onChange={(e) => setQ(e.target.value)} placeholder="검색어 (답변 생성 없이 청크만 조회)" />
-        <Button type="submit" variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} disabled={loading || !q.trim()}>{loading ? '검색 중…' : '검색'}</Button>
+        <Button type="submit" variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap', minWidth: 64 }} disabled={loading || !q.trim()}>{loading ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><CircularProgress size={14} color="inherit" />검색 중</Box> : '검색'}</Button>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>{error}</Alert>}
@@ -97,7 +97,9 @@ export default function SearchView({ space }) {
             검색 결과
             {searched && <Typography component="span" color="text.secondary"> · {results.length}건</Typography>}
           </Typography>
-          {results.length > 0
+          {loading
+            ? <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', gap: 1 }}><CircularProgress size={20} />검색 중</Box>
+            : results.length > 0
             ? (
               <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, pr: 0.5 }}>
                 {results.map((r) => {
