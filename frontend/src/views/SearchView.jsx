@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip, CircularProgress } from '@mui/material'
+import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip, CircularProgress, IconButton } from '@mui/material'
+import { OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import * as api from '../api'
 import { MONO_FONT, FONT_SIZES } from '../theme'
 import { KindChip, Breadcrumb } from '../components/Common'
@@ -160,7 +161,7 @@ export default function SearchView({ space }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5, flexShrink: 0 }}>
                   <KindChip kind={selected.kind} />
                   <Typography variant="h6" noWrap sx={{ minWidth: 0 }}>{selected.title}</Typography>
-                    <Link href={selected.url} target="_blank" rel="noreferrer" sx={{ ml: 'auto', flexShrink: 0, fontSize: FONT_SIZES.sm }}>열기</Link>
+                    <IconButton href={selected.url} target="_blank" rel="noreferrer" size="small" sx={{ ml: 'auto', flexShrink: 0 }}><OpenInNewIcon fontSize="small" /></IconButton>
                 </Box>
                 <Box sx={{ mb: 1, flexShrink: 0 }}>
                   <Breadcrumb path={selected.path} heading={selected.heading} dateStr={fmtDate(selected.updated_at)} />
