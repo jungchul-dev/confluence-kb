@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tooltip } from '@mui/material'
-import { HelpOutlined as HelpIcon } from '@mui/icons-material'
+import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tooltip, IconButton } from '@mui/material'
+import { HelpOutlined as HelpIcon, Close as CloseIcon } from '@mui/icons-material'
 import FloatingBubbles from '../components/FloatingBubbles'
 import * as api from '../api'
 
@@ -37,6 +37,7 @@ export default function AnalyticsView() {
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
+    setClusters([]); setTotalDocs(0); setInfo(null); setSelected(null); setPage(1)
     try {
       const data = await api.getClusters(k)
       setClusters(data.clusters); setTotalDocs(data.total_documents); setK(data.k)
@@ -72,7 +73,7 @@ export default function AnalyticsView() {
     <Box>
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
         <Typography color="text.secondary">클러스터 수</Typography>
-        <TextField type="number" size="small" sx={{ width: 70 }} slotProps={{ htmlInput: { min: 0, max: 50 } }} value={k} onChange={(e) => setK(Number(e.target.value))} />
+        <TextField type="number" size="small" sx={{ width: 70 }} slotProps={{ htmlInput: { min: 0, max: 50 } }} value={k} onChange={(e) => setK(Math.max(0, Math.min(50, Number(e.target.value))))} />
         <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={load} disabled={loading}>{loading ? '분석 중…' : '분석'}</Button>
         <Tooltip arrow title="0 이면 2~20 범위에서 실루엣 점수가 가장 높은 개수를 자동으로 고릅니다. 숫자를 넣으면 그 개수로 나눕니다.">
           <Typography color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>
@@ -129,7 +130,10 @@ export default function AnalyticsView() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
                 <Chip size="small" label={selected.label || `클러스터 ${selected.cluster_id}`} sx={{ backgroundColor: selectedColor, color: '#fff', fontWeight: 600, maxWidth: '100%' }} />
                 <Typography color="text.secondary">{selected.doc_count}개 문서</Typography>
-                {pageCount > 1 && <Typography color="text.secondary" sx={{ ml: 'auto', fontSize: '0.8125rem' }}>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, selectedDocs.length)} / {selectedDocs.length}</Typography>}
+                {pageCount > 1 && <Typography color="text.secondary" sx={{ fontSize: '0.8125rem' }}>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, selectedDocs.length)} / {selectedDocs.length}</Typography>}
+                <IconButton size="small" aria-label="닫기" onClick={() => setSelected(null)} sx={{ ml: 'auto', p: 0.5 }}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
               </Box>
               {selected.keywords?.length > 0 && (
                 <Typography color="text.secondary" sx={{ fontSize: '0.8125rem', mb: 1 }}>
