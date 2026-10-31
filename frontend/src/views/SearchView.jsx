@@ -216,7 +216,7 @@ export default function SearchView({ space }) {
             : (
               <>
                 <Typography variant="h6" sx={{ mb: 1, flexShrink: 0 }}>상세</Typography>
-                <Placeholder>왼쪽 목록에서 결과를 선택하면 청크 본문과 유사 문서가 여기에 표시됩니다.</Placeholder>
+                <Placeholder>왼쪽 목록에서 결과를 선택하면 청크 본문과 유사 문서가 표시됩니다.</Placeholder>
               </>
             )}
         </Card>
