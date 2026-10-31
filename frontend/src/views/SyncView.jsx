@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Box, Typography, Button, Card, Table, TableHead, TableBody, TableRow, TableCell, Alert, IconButton } from '@mui/material'
 import { Refresh } from '@mui/icons-material'
 import * as api from '../api'
+import { FONT_SIZES } from '../theme'
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString('ko-KR') : '-')
 
@@ -73,7 +74,7 @@ export default function SyncView() {
               <TableRow key={r.id}>
                 <TableCell>{fmt(r.started_at)}</TableCell><TableCell>{r.space_key}</TableCell><TableCell>{(r.mode || '').toUpperCase()}</TableCell>
                 <TableCell sx={{ color: r.status === 'failed' ? 'error.main' : r.status === 'success' ? 'success.main' : 'inherit' }}>
-                  {(r.status || '').toUpperCase()}{r.status === 'failed' && r.message && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.75rem', ml: 0.5, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'bottom' }} title={r.message}>· {r.message}</Typography>}
+                  {(r.status || '').toUpperCase()}{r.status === 'failed' && r.message && <Typography component="span" color="text.secondary" sx={{ fontSize: FONT_SIZES.xs, ml: 0.5, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'bottom' }} title={r.message}>· {r.message}</Typography>}
                 </TableCell>
                 <TableCell>{r.pages_seen}</TableCell><TableCell>{r.pages_indexed}</TableCell><TableCell>{r.attachments_indexed}</TableCell><TableCell>{r.pages_deleted}</TableCell><TableCell sx={{ color: r.errors ? 'error.main' : 'inherit' }}>{r.errors}</TableCell>
               </TableRow>
