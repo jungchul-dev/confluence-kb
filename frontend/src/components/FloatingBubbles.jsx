@@ -116,16 +116,17 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
             <g
               key={n.id}
               transform={`translate(${n.x},${n.y})`}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'pointer', opacity: selectedId && !selected ? 0.3 : 1, transition: 'opacity 0.2s' }}
               onMouseEnter={() => setHover({ id: n.id })}
               onMouseLeave={() => setHover(null)}
               onClick={() => onSelect?.(n)}
             >
+              {selected && <circle r={n.r * 1.15} fill="none" stroke={n.color} strokeWidth={3} opacity={0.35} />}
               <circle
-                r={n.r * (hovered ? 1.04 : 1)}
+                r={n.r * (hovered ? 1.04 : 1) * (selected ? 1.06 : 1)}
                 fill={n.color}
                 stroke={selected ? '#18181b' : 'rgba(0,0,0,0.25)'}
-                strokeWidth={2}
+                strokeWidth={selected ? 2 : 1}
               />
               <text textAnchor="middle" dominantBaseline="central" fill={n.textColor} style={{ fontSize: fs, fontWeight: 700, pointerEvents: 'none', fontFamily: 'inherit' }}>
                 {lines.map((l, i) => (
