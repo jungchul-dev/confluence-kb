@@ -3,7 +3,7 @@ import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tool
 import { HelpOutlined as HelpIcon, Close as CloseIcon } from '@mui/icons-material'
 import FloatingBubbles from '../components/FloatingBubbles'
 import FloatingDots from '../components/FloatingDots'
-import { KindChip, Breadcrumb } from '../components/shared'
+import { KindChip, Breadcrumb } from '../components/Common'
 import * as api from '../api'
 import { FONT_SIZES } from '../theme'
 
