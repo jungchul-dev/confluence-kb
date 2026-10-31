@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Box } from '@mui/material'
 import { forceSimulation, forceX, forceY, forceCollide } from 'd3-force'
+import { FONT_SIZES } from '../theme'
 
 // ── 라벨 줄바꿈 (글자 폭 근사: 한글 1em, 영문 0.58em, 공백 0.3em) ──────────────
 const charWidth = (ch, fs) => (ch === ' ' ? fs * 0.3 : ch.charCodeAt(0) < 128 ? fs * 0.58 : fs)
@@ -142,11 +143,11 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
         const left = Math.min(size.w - 380, Math.max(8, n.x + n.r + 8))
         const top = Math.max(8, n.y - 24)
         return (
-          <Box sx={{ position: 'absolute', left, top, pointerEvents: 'none', background: '#fff', border: '1px solid #e4e4e7', borderRadius: 1.5, px: 1.25, py: 0.75, fontSize: 13, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', maxWidth: 360, whiteSpace: 'nowrap', zIndex: 2 }}>
+          <Box sx={{ position: 'absolute', left, top, pointerEvents: 'none', background: '#fff', border: '1px solid #e4e4e7', borderRadius: 1.5, px: 1.25, py: 0.75, fontSize: FONT_SIZES.sm, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', maxWidth: 360, whiteSpace: 'nowrap', zIndex: 2 }}>
             <Box component="span" sx={{ display: 'inline-block', width: 10, height: 10, borderRadius: 0.5, backgroundColor: n.color, mr: 0.75, verticalAlign: 'middle' }} />
             <strong>{n.label}</strong>
             <Box component="span" sx={{ color: 'text.secondary', ml: 0.75 }}>{n.count}개 문서</Box>
-            {n.tooltip && <Box sx={{ color: 'text.secondary', mt: 0.5, fontSize: 12, whiteSpace: 'normal' }}>{n.tooltip}</Box>}
+            {n.tooltip && <Box sx={{ color: 'text.secondary', mt: 0.5, fontSize: FONT_SIZES.xs, whiteSpace: 'normal' }}>{n.tooltip}</Box>}
           </Box>
         )
       })()}
