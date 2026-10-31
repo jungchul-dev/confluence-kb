@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Typography, Divider, MenuItem, Select, FormControl, Checkbox, ListItemText, CircularProgress } from '@mui/material'
+import { Box, Typography, Divider, MenuItem, Select, FormControl, Checkbox, CircularProgress } from '@mui/material'
 import AskView from './views/AskView'
 import SearchView from './views/SearchView'
 import SyncView from './views/SyncView'
@@ -70,13 +70,13 @@ export default function App() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography noWrap sx={{ fontWeight: 600, fontSize: '1rem', letterSpacing: '-0.01em' }}>{VIEW_TITLES[tab]}</Typography>
             {showSpaceFilter && (
-              <FormControl size="small" sx={{ minWidth: 140 }}>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
                 <Select multiple value={space} onChange={(e) => setSpace(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)} displayEmpty renderValue={() => spaceLabel} MenuProps={{ PaperProps: { sx: { maxHeight: 400 } } }}>
                   {spacesLoading && <MenuItem disabled><CircularProgress size={16} sx={{ mr: 1 }} /> 불러오는 중…</MenuItem>}
                   {spaces.map((s) => (
                     <MenuItem key={s.space_key} value={s.space_key}>
                       <Checkbox checked={space.indexOf(s.space_key) > -1} size="small" />
-                      <ListItemText primary={s.space_key} secondary={`${s.doc_count}개`} />
+                      <Typography sx={{ fontSize: '0.875rem' }}>{s.space_key} ({s.doc_count})</Typography>
                     </MenuItem>
                   ))}
                 </Select>
