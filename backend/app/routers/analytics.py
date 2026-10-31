@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])
 
 _PERM = "(d.allowed_groups && CAST(:groups AS text[]) OR '*' = ANY(d.allowed_groups))"
+_ANALYTICS_SPACE = "d.space_key = ANY(CAST(:space_keys AS text[]))"
 
 # 유사 문서: 문서 임베딩(접두 없는 본문) 기준 코사인 유사도. 문서 임베딩이 없으면 청크 평균으로 대체한다.
 _DOC_VEC = "COALESCE(d.embedding, (SELECT AVG(c.embedding) FROM chunks c WHERE c.document_id = d.id))"
@@ -84,7 +85,7 @@ _DOC_EMBEDDINGS_SQL = text(f"""
            COALESCE(d.embedding, AVG(c.embedding))::text AS emb,
            (d.embedding IS NULL) AS fallback
     FROM chunks c JOIN documents d ON d.id = c.document_id
-    WHERE {_PERM}
+    WHERE {_PERM} AND {_ANALYTICS_SPACE}
     GROUP BY d.id, d.page_id, d.title, d.path, d.url, d.space_key, d.kind, d.updated_at, d.embedding
     ORDER BY d.id
 """)  # 행 순서가 K-Means 초기화에 영향을 주므로 ORDER BY 로 고정한다 (같은 데이터면 같은 결과)
@@ -187,6 +188,7 @@ def _choose_k(x, requested: int, n: int) -> tuple:
 async def get_clusters(
     k: int = Query(0, ge=0, le=50),
     llm: bool = Query(True, description="true 면 LLM 으로 클러스터 제목을 짓는다 (실패 시 키워드 제목)"),
+    space_key: Optional[str] = Query(None, description="특정 공간만 클러스터링. 콤마로 여러 개 지정. 없으면 전체."),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -201,12 +203,19 @@ async def get_clusters(
             detail="클러스터링에는 scikit-learn 이 필요합니다. pip install -r requirements-optional.txt",
         )
 
+    space_keys = [s.strip() for s in space_key.split(",") if s.strip()] if space_key else None
+
+    sql_str = str(_DOC_EMBEDDINGS_SQL)
     if settings.skip_space_permissions or user.sees_everything:
-        sql = text(str(_DOC_EMBEDDINGS_SQL).replace(_PERM, "TRUE"))
+        sql_str = sql_str.replace(_PERM, "TRUE")
         params = {}
     else:
-        sql = _DOC_EMBEDDINGS_SQL
         params = {"groups": user.groups}
+    if not space_keys:
+        sql_str = sql_str.replace(_ANALYTICS_SPACE, "TRUE")
+    else:
+        params["space_keys"] = space_keys
+    sql = text(sql_str)
 
     rows = (await db.execute(sql, params)).fetchall()
     n = len(rows)
