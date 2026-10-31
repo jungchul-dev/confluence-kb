@@ -3,6 +3,7 @@ import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tool
 import { HelpOutlined as HelpIcon, Close as CloseIcon } from '@mui/icons-material'
 import FloatingBubbles from '../components/FloatingBubbles'
 import * as api from '../api'
+import { FONT_SIZES } from '../theme'
 
 const CLUSTER_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ea580c', '#0891b2', '#ca8a04', '#be185d',
   '#4f46e5', '#059669', '#db2777', '#7c3aed', '#0d9488', '#c2410c', '#4338ca', '#0284c7']
@@ -91,7 +92,7 @@ export default function AnalyticsView({ space }) {
           <Tooltip
             arrow
             placement="bottom-start"
-            slotProps={{ tooltip: { sx: { maxWidth: 420, fontSize: '0.8125rem', lineHeight: 1.6 } } }}
+            slotProps={{ tooltip: { sx: { maxWidth: 420, fontSize: FONT_SIZES.sm, lineHeight: 1.6 } } }}
             title={
               <Box>
                 <strong>실루엣 점수</strong> — 클러스터가 얼마나 또렷하게 나뉘었는지를 -1~1 로 나타낸 값입니다.
@@ -131,13 +132,13 @@ export default function AnalyticsView({ space }) {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
                 <Chip size="small" label={selected.label || `클러스터 ${selected.cluster_id}`} sx={{ backgroundColor: selectedColor, color: '#fff', fontWeight: 600, maxWidth: '100%' }} />
                 <Typography color="text.secondary">{selected.doc_count}개 문서</Typography>
-                {pageCount > 1 && <Typography color="text.secondary" sx={{ fontSize: '0.8125rem' }}>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, selectedDocs.length)} / {selectedDocs.length}</Typography>}
+                {pageCount > 1 && <Typography color="text.secondary" sx={{ fontSize: FONT_SIZES.sm }}>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, selectedDocs.length)} / {selectedDocs.length}</Typography>}
                 <IconButton size="small" aria-label="닫기" onClick={() => setSelected(null)} sx={{ ml: 'auto', p: 0.5 }}>
                   <CloseIcon fontSize="small" />
                 </IconButton>
               </Box>
               {selected.keywords?.length > 0 && (
-                <Typography color="text.secondary" sx={{ fontSize: '0.8125rem', mb: 1 }}>
+                <Typography color="text.secondary" sx={{ fontSize: FONT_SIZES.sm, mb: 1 }}>
                   {selected.label_source === 'keywords' && <>(LLM 제목 실패, 키워드 제목 사용) · </>}키워드: {selected.keywords.join(', ')}
                   {selected.representative_docs[0] && <> · 대표 문서: {cleanTitle(selected.representative_docs[0].title)}</>}
                 </Typography>
@@ -161,7 +162,7 @@ export default function AnalyticsView({ space }) {
                       <Chip size="small" label={d.kind === 'attachment' ? '첨부' : '페이지'} color={d.kind === 'attachment' ? 'success' : 'primary'} variant="filled" sx={{ flexShrink: 0 }} />
                       <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{d.title}</Typography>
                     </Box>
-                    <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
+                    <Typography noWrap sx={{ fontSize: FONT_SIZES.xs, mt: 0.5, color: 'text.secondary' }}>
                       {d.path}{d.space_key ? ` · ${d.space_key}` : ''}
                     </Typography>
                   </Box>
@@ -170,7 +171,7 @@ export default function AnalyticsView({ space }) {
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', pt: 1.5, mt: 1, borderTop: 1, borderColor: 'divider', minHeight: 44 }}>
                 {pageCount > 1
                   ? <Pagination count={pageCount} page={page} onChange={(_, p) => setPage(p)} size="small" color="primary" showFirstButton showLastButton />
-                  : <Typography color="text.secondary" sx={{ fontSize: '0.8125rem' }}>전체 {selectedDocs.length}건</Typography>}
+                  : <Typography color="text.secondary" sx={{ fontSize: FONT_SIZES.sm }}>전체 {selectedDocs.length}건</Typography>}
               </Box>
             </Card>
           )}
