@@ -94,10 +94,10 @@ export default function App() {
           <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.secondary' }}>{localStorage.getItem('userId') || ''}</Typography>
         </Box>
         <Box sx={{ flex: 1, overflow: 'auto', px: 5, py: 4 }}>
-          {tab === 'ask' && <AskView space={space} />}
-          {tab === 'search' && <SearchView space={space} />}
-          {tab === 'analytics' && <AnalyticsView space={space} />}
-          {tab === 'sync' && <SyncView />}
+          <Box sx={{ display: tab === 'ask' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><AskView space={space} /></Box>
+          <Box sx={{ display: tab === 'search' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><SearchView space={space} /></Box>
+          <Box sx={{ display: tab === 'analytics' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><AnalyticsView space={space} /></Box>
+          <Box sx={{ display: tab === 'sync' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><SyncView /></Box>
         </Box>
       </Box>
     </Box>
