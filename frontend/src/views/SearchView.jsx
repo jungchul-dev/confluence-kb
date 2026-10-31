@@ -103,17 +103,19 @@ export default function SearchView({ space }) {
       </Card>
 
       {error && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>{error}</Alert>}
-      {!passed && results.length > 0 && <Alert severity="warning" sx={{ mb: 2, flexShrink: 0 }}>리랭커 점수가 하한 미만입니다. 답변 단계에서는 "못 찾음"으로 처리됩니다.</Alert>}
+      {searched && !passed && <Alert severity="warning" sx={{ mb: 2, flexShrink: 0 }}>입력한 검색어와 관련된 문서를 찾을 수 없습니다.</Alert>}
 
       <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 2 }}>
         {/* 결과 목록 */}
         <Card variant="outlined" sx={{ p: 2, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Typography variant="h6" sx={{ mb: 1, flexShrink: 0 }}>
             검색 결과
-            {searched && <Typography component="span" color="text.secondary"> · {results.length}건</Typography>}
+            {searched && passed && <Typography component="span" color="text.secondary"> · {results.length}건</Typography>}
           </Typography>
           {loading
             ? <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', gap: 1 }}><CircularProgress size={20} />검색 중</Box>
+            : searched && !passed
+            ? <Placeholder>검색 결과가 없습니다.</Placeholder>
             : results.length > 0
             ? (
               <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, pr: 0.5 }}>
