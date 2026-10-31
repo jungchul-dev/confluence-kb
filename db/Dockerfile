@@ -24,14 +24,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # mecab-ko (mecab 0.996 한국어 패치판) → /usr/local
 RUN cd /tmp \
-    && wget -q https://bitbucket.org/eunjeon/mecab-ko/downloads/mecab-${MECAB_KO_VERSION}.tar.gz \
+    && wget -q https://bitbucket.org/eunjeon/mecab-ko/downloads/mecab-${MECAB_KO_VERSION}.tar.gz --no-check-certificate \
     && tar xzf mecab-${MECAB_KO_VERSION}.tar.gz && cd mecab-${MECAB_KO_VERSION} \
     && ./configure --prefix=/usr/local --with-charset=utf8 \
     && make -j"$(nproc)" && make install && ldconfig
 
 # mecab-ko-dic (사전) → /usr/local/lib/mecab/dic/mecab-ko-dic
 RUN cd /tmp \
-    && wget -q https://bitbucket.org/eunjeon/mecab-ko-dic/downloads/mecab-ko-dic-${MECAB_KO_DIC_VERSION}.tar.gz \
+    && wget -q https://bitbucket.org/eunjeon/mecab-ko-dic/downloads/mecab-ko-dic-${MECAB_KO_DIC_VERSION}.tar.gz --no-check-certificate \
     && tar xzf mecab-ko-dic-${MECAB_KO_DIC_VERSION}.tar.gz && cd mecab-ko-dic-${MECAB_KO_DIC_VERSION} \
     && ./autogen.sh && ./configure --prefix=/usr/local --with-mecab-config=/usr/local/bin/mecab-config \
     && make -j"$(nproc)"
@@ -45,7 +45,7 @@ RUN cd /tmp/mecab-ko-dic-${MECAB_KO_DIC_VERSION} \
     && echo '에스컬레이션 쿠버네티스 임베딩' | mecab -O wakati
 
 # textsearch_ko (PostgreSQL 확장) → ts_mecab_ko.so + textsearch_ko.control/--1.0.sql
-RUN cd /tmp && git clone --depth 1 ${TEXTSEARCH_KO_REPO} textsearch_ko && cd textsearch_ko \
+RUN cd /tmp && git config --global http.sslVerify false && git clone --depth 1 ${TEXTSEARCH_KO_REPO} textsearch_ko && cd textsearch_ko \
     && PATH=/usr/local/bin:/usr/lib/postgresql/${PG_MAJOR}/bin:$PATH make USE_PGXS=1 install \
     && git log -1 --format='%H %cd' > /usr/local/share/textsearch_ko.commit
 
