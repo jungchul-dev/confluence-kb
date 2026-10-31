@@ -23,7 +23,7 @@ const Turn = ({ turn, running, selected, onSelect }) => {
       onClick={onSelect}
       sx={{
         mb: 2, px: 1.5, py: 1, borderRadius: 2, border: 1, cursor: onSelect ? 'pointer' : 'default',
-        borderColor: selected ? 'primary.main' : 'divider', backgroundColor: selected ? 'action.selected' : 'background.default',
+        borderColor: selected ? 'primary.main' : 'divider', backgroundColor: selected && !running ? 'action.selected' : '#fff',
         color: turn.found === false ? 'text.secondary' : 'text.primary',
       }}
     >
