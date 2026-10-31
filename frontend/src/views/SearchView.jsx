@@ -97,10 +97,10 @@ export default function SearchView({ space }) {
   return (
     // 위: 검색어(고정) / 아래: 결과 목록(왼쪽)·선택한 결과 상세(오른쪽) 두 칸이 남은 높이를 쓰고 각자 안에서 스크롤된다
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <Box component="form" sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2, flexShrink: 0 }} onSubmit={submit}>
+      <Card variant="outlined" component="form" sx={{ p: 2, mb: 2, flexShrink: 0, display: 'flex', gap: 1, alignItems: 'center' }} onSubmit={submit}>
         <TextField fullWidth size="small" value={q} onChange={(e) => setQ(e.target.value)} placeholder="검색어 (답변 생성 없이 청크만 조회)" />
-        <Button type="submit" variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap', minWidth: 64 }} disabled={loading || !q.trim()}>{loading ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><CircularProgress size={14} color="inherit" />검색 중</Box> : '검색'}</Button>
-      </Box>
+        <Button type="submit" variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap', minWidth: 56 }} disabled={loading || !q.trim()}>{loading ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><CircularProgress size={14} color="inherit" />검색 중</Box> : '검색'}</Button>
+      </Card>
 
       {error && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>{error}</Alert>}
       {!passed && results.length > 0 && <Alert severity="warning" sx={{ mb: 2, flexShrink: 0 }}>리랭커 점수가 하한 미만입니다. 답변 단계에서는 "못 찾음"으로 처리됩니다.</Alert>}
