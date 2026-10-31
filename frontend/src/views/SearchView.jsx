@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip } from '@mui/material'
 import * as api from '../api'
 import { MONO_FONT } from '../theme'
@@ -42,7 +42,7 @@ const RankBadge = ({ label, rank, both, tip }) => (
   </Tooltip>
 )
 
-export default function SearchView() {
+export default function SearchView({ space }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [passed, setPassed] = useState(true)
@@ -52,12 +52,14 @@ export default function SearchView() {
   const [selected, setSelected] = useState(null)
   const [related, setRelated] = useState({})
 
+  useEffect(() => { setResults([]); setSelected(null); setSearched(false); setError(''); setRelated({}) }, [space])
+
   const submit = async (e) => {
     e?.preventDefault()
     if (!q.trim() || loading) return
     setLoading(true); setError('')
     try {
-      const data = await api.search(q.trim(), 20)
+      const data = await api.search(q.trim(), 20, space)
       setResults(data.results); setPassed(data.passed); setSelected(null); setRelated({}); setSearched(true)
     } catch (err) {
       setError(err.message)
@@ -147,7 +149,9 @@ export default function SearchView() {
                 <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, pr: 0.5 }}>
                   <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', fontFamily: MONO_FONT, fontSize: '0.75rem', backgroundColor: 'background.default', border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>{selected.content}</Box>
                   <Box sx={{ mt: 1.5 }}>
-                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary', mb: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>유사 문서</Typography>
+                    <Typography sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      유사 문서 <Typography component="span" sx={{ fontSize: '0.8125rem', fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'text.disabled' }}>(전체 공간에서 검색)</Typography>
+                    </Typography>
                     {related[selected.document_id]
                       ? related[selected.document_id].length > 0
                         ? related[selected.document_id].map((d) => (
