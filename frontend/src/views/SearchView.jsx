@@ -150,7 +150,7 @@ export default function SearchView({ space }) {
                 })}
               </Box>
             )
-            : <Placeholder>{searched ? '검색 결과가 없습니다.' : '검색어를 입력하면 결과가 여기에 표시됩니다.'}</Placeholder>}
+            : <Placeholder>{searched ? '검색 결과가 없습니다.' : '검색어를 입력하면 결과가 표시됩니다.'}</Placeholder>}
         </Card>
 
         {/* 선택한 결과 상세 */}
