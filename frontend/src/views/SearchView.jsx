@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { Box, Typography, TextField, Button, Card, Chip, Alert, Link, Tooltip } from '@mui/material'
 import * as api from '../api'
-import { MONO_FONT } from '../theme'
+import { MONO_FONT, FONT_SIZES } from '../theme'
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' }) : '')
 
 const Placeholder = ({ children }) => (
-  <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', fontSize: '0.875rem', textAlign: 'center', px: 2 }}>{children}</Box>
+  <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', fontSize: FONT_SIZES.md, textAlign: 'center', px: 2 }}>{children}</Box>
 )
 
 const KindChip = ({ kind }) => (
@@ -19,11 +19,11 @@ const RelevanceBar = ({ score }) => {
   return (
     <Tooltip title={score == null ? '점수 없음' : `관련도 ${score.toFixed(3)} (리랭커 점수, 리랭커가 없으면 RRF 정규화 점수)`}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
-        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>관련도</Typography>
+        <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>관련도</Typography>
         <Box sx={{ width: 90, height: 6, borderRadius: 3, backgroundColor: 'action.hover', overflow: 'hidden' }}>
           <Box sx={{ width: `${pct ?? 0}%`, height: '100%', backgroundColor: pct == null ? 'transparent' : pct >= 70 ? 'success.main' : pct >= 40 ? 'warning.main' : 'text.disabled' }} />
         </Box>
-        <Typography sx={{ fontSize: '0.75rem', fontFamily: MONO_FONT, width: 36, textAlign: 'right' }}>{pct == null ? '-' : `${pct}%`}</Typography>
+        <Typography sx={{ fontSize: FONT_SIZES.xs, fontFamily: MONO_FONT, width: 36, textAlign: 'right' }}>{pct == null ? '-' : `${pct}%`}</Typography>
       </Box>
     </Tooltip>
   )
@@ -37,7 +37,7 @@ const RankBadge = ({ label, rank, both, tip }) => (
       variant={rank == null ? 'outlined' : 'filled'}
       color={rank == null ? 'default' : both ? 'primary' : 'default'}
       label={rank == null ? `${label} 없음` : `${label} ${rank}위`}
-      sx={{ fontSize: '0.75rem', height: 22, flexShrink: 0, ...(rank == null ? { color: 'text.disabled', borderStyle: 'dashed' } : {}) }}
+      sx={{ fontSize: FONT_SIZES.xs, height: 22, flexShrink: 0, ...(rank == null ? { color: 'text.disabled', borderStyle: 'dashed' } : {}) }}
     />
   </Tooltip>
 )
@@ -122,7 +122,7 @@ export default function SearchView({ space }) {
                         <RankBadge label="의미" rank={r.vector_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="임베딩(벡터) 검색 순위. 검색어와 뜻이 비슷한 순서" />
                         <RankBadge label="키워드" rank={r.keyword_rank} both={r.vector_rank != null && r.keyword_rank != null} tip="키워드(형태소) 검색 순위. 검색어 단어가 실제로 들어 있는 순서" />
                       </Box>
-                      <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
+                      <Typography noWrap sx={{ fontSize: FONT_SIZES.xs, mt: 0.5, color: 'text.secondary' }}>
                         {r.path}{r.heading ? ` › ${r.heading}` : ''} · 수정 {fmtDate(r.updated_at)}
                       </Typography>
                     </Box>
@@ -141,16 +141,16 @@ export default function SearchView({ space }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5, flexShrink: 0 }}>
                   <KindChip kind={selected.kind} />
                   <Typography variant="h6" noWrap sx={{ minWidth: 0 }}>{selected.title}</Typography>
-                  <Link href={selected.url} target="_blank" rel="noreferrer" sx={{ ml: 'auto', flexShrink: 0, fontSize: '0.8125rem' }}>열기</Link>
+                    <Link href={selected.url} target="_blank" rel="noreferrer" sx={{ ml: 'auto', flexShrink: 0, fontSize: FONT_SIZES.sm }}>열기</Link>
                 </Box>
-                <Typography sx={{ fontSize: '0.75rem', mb: 1, color: 'text.secondary', flexShrink: 0 }}>
+                <Typography sx={{ fontSize: FONT_SIZES.xs, mb: 1, color: 'text.secondary', flexShrink: 0 }}>
                   {selected.path}{selected.heading ? ` › ${selected.heading}` : ''} · 수정 {fmtDate(selected.updated_at)}
                 </Typography>
                 <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, pr: 0.5 }}>
-                  <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', fontFamily: MONO_FONT, fontSize: '0.75rem', backgroundColor: 'background.default', border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>{selected.content}</Box>
+                  <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, backgroundColor: 'background.default', border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>{selected.content}</Box>
                   <Box sx={{ mt: 1.5 }}>
                     <Typography sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      유사 문서 <Typography component="span" sx={{ fontSize: '0.8125rem', fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'text.disabled' }}>(전체 공간에서 검색)</Typography>
+                      유사 문서 <Typography component="span" sx={{ fontSize: FONT_SIZES.sm, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'text.disabled' }}>(전체 공간에서 검색)</Typography>
                     </Typography>
                     {related[selected.document_id]
                       ? related[selected.document_id].length > 0
@@ -172,16 +172,16 @@ export default function SearchView({ space }) {
                               <KindChip kind={d.kind} />
                               <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{d.title}</Typography>
                               <Tooltip title={`코사인 유사도 ${d.score.toFixed(3)}`}>
-                                <Typography sx={{ ml: 'auto', fontFamily: MONO_FONT, fontSize: '0.75rem', color: 'text.secondary', flexShrink: 0 }}>유사도 {Math.round(d.score * 100)}%</Typography>
+                                <Typography sx={{ ml: 'auto', fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary', flexShrink: 0 }}>유사도 {Math.round(d.score * 100)}%</Typography>
                               </Tooltip>
                             </Box>
-                            <Typography noWrap sx={{ fontSize: '0.75rem', mt: 0.5, color: 'text.secondary' }}>
+                            <Typography noWrap sx={{ fontSize: FONT_SIZES.xs, mt: 0.5, color: 'text.secondary' }}>
                               {d.path}{d.space_key ? ` · ${d.space_key}` : ''}{d.updated_at ? ` · 수정 ${fmtDate(d.updated_at)}` : ''}
                             </Typography>
                           </Box>
                         ))
-                        : <Typography sx={{ fontSize: '0.8125rem', color: 'text.disabled' }}>유사 문서가 없습니다.</Typography>
-                      : <Typography sx={{ fontSize: '0.8125rem', color: 'text.disabled' }}>불러오는 중…</Typography>}
+                        : <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.disabled' }}>유사 문서가 없습니다.</Typography>
+                      : <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.disabled' }}>불러오는 중…</Typography>}
                   </Box>
                 </Box>
               </>
