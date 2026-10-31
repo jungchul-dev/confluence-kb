@@ -24,21 +24,23 @@ const request = async (path, { method = 'GET', body } = {}) => {
 }
 
 export const health = () => request('/health')
-export const search = (q, k = 10) => request(`/search?q=${encodeURIComponent(q)}&k=${k}`)
+export const getSpaces = () => request('/admin/spaces')
+export const search = (q, k = 10, spaceKeys = []) =>
+  request(`/search?q=${encodeURIComponent(q)}&k=${k}${spaceKeys.length ? `&space_key=${encodeURIComponent(spaceKeys.join(','))}` : ''}`)
 export const getDocument = (pageId, attachmentId) =>
   request(`/documents/${pageId}${attachmentId ? `?attachment_id=${attachmentId}` : ''}`)
 export const getRelated = (documentId, k = 5) =>
   request(`/related-documents?document_id=${encodeURIComponent(documentId)}&k=${k}`)
-export const getClusters = (k = 0) =>
-  request(`/admin/clusters${k > 0 ? `?k=${k}` : ''}`)
+export const getClusters = (k = 0, spaceKeys = []) =>
+  request(`/admin/clusters${k > 0 ? `?k=${k}` : ''}${spaceKeys.length ? `${k > 0 ? '&' : '?'}space_key=${encodeURIComponent(spaceKeys.join(','))}` : ''}`)
 export const syncStatus = () => request('/admin/sync/status')
 export const syncErrors = () => request('/admin/sync/errors')
 export const runSync = (mode, spaces) => request('/admin/sync/run', { method: 'POST', body: { mode, spaces: spaces || null } })
 
 // 질문 — SSE 스트리밍. history 는 이전 대화 [{ role: 'user'|'assistant', content }] (서버가 ASK_HISTORY_TURNS 턴으로 자른다).
 // onMeta(출처·검색 문장), onDelta(답변 조각), 완료 시 { query_id, latency_ms } 를 돌려준다.
-export const ask = async (question, { history = [], onMeta, onDelta, signal } = {}) => {
-  const res = await fetch(`${BASE}/ask?stream=true`, { method: 'POST', headers: headers(), body: JSON.stringify({ question, history }), signal })
+export const ask = async (question, { history = [], onMeta, onDelta, signal, spaceKeys = [] } = {}) => {
+  const res = await fetch(`${BASE}/ask?stream=true`, { method: 'POST', headers: headers(), body: JSON.stringify({ question, history, space_key: spaceKeys.length ? spaceKeys : null }), signal })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || `${res.status} ${res.statusText}`)
