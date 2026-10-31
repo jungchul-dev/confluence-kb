@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
-import { Box, Typography, Divider } from '@mui/material'
+import React, { useEffect, useState } from 'react'
+import { Box, Typography, Divider, MenuItem, Select, FormControl, Checkbox, ListItemText, CircularProgress } from '@mui/material'
 import AskView from './views/AskView'
 import SearchView from './views/SearchView'
 import SyncView from './views/SyncView'
 import AnalyticsView from './views/AnalyticsView'
+import * as api from './api'
 import { BORDER, HOVER_BG, SELECTED_BG, STRONG_TEXT, MUTED_TEXT } from './theme'
 
 const NAV_ITEMS = [
@@ -34,6 +35,16 @@ const NavItem = ({ label, isActive, onClick }) => (
 
 export default function App() {
   const [tab, setTab] = useState('ask')
+  const [space, setSpace] = useState([])
+  const [spaces, setSpaces] = useState([])
+  const [spacesLoading, setSpacesLoading] = useState(true)
+
+  useEffect(() => {
+    api.getSpaces().then(setSpaces).catch(() => {}).finally(() => setSpacesLoading(false))
+  }, [])
+
+  const showSpaceFilter = tab === 'ask' || tab === 'search' || tab === 'analytics'
+  const spaceLabel = space.length === 0 ? '전체 공간' : space.length === 1 ? space[0] : `${space[0]} 외 ${space.length - 1}`
 
   return (
     <Box sx={{ display: 'flex', height: '100%', overflow: 'hidden', backgroundColor: 'background.default' }}>
@@ -56,13 +67,28 @@ export default function App() {
 
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Box sx={{ height: 56, flexShrink: 0, px: 5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: BORDER }}>
-          <Typography noWrap sx={{ fontWeight: 600, fontSize: '1rem', letterSpacing: '-0.01em' }}>{VIEW_TITLES[tab]}</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography noWrap sx={{ fontWeight: 600, fontSize: '1rem', letterSpacing: '-0.01em' }}>{VIEW_TITLES[tab]}</Typography>
+            {showSpaceFilter && (
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <Select multiple value={space} onChange={(e) => setSpace(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)} displayEmpty renderValue={() => spaceLabel} MenuProps={{ PaperProps: { sx: { maxHeight: 400 } } }}>
+                  {spacesLoading && <MenuItem disabled><CircularProgress size={16} sx={{ mr: 1 }} /> 불러오는 중…</MenuItem>}
+                  {spaces.map((s) => (
+                    <MenuItem key={s.space_key} value={s.space_key}>
+                      <Checkbox checked={space.indexOf(s.space_key) > -1} size="small" />
+                      <ListItemText primary={s.space_key} secondary={`${s.doc_count}개`} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          </Box>
           <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{localStorage.getItem('userId') || ''}</Typography>
         </Box>
         <Box sx={{ flex: 1, overflow: 'auto', px: 5, py: 4 }}>
-          {tab === 'ask' && <AskView />}
-          {tab === 'search' && <SearchView />}
-          {tab === 'analytics' && <AnalyticsView />}
+          {tab === 'ask' && <AskView space={space} />}
+          {tab === 'search' && <SearchView space={space} />}
+          {tab === 'analytics' && <AnalyticsView space={space} />}
           {tab === 'sync' && <SyncView />}
         </Box>
       </Box>
