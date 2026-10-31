@@ -4,9 +4,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import * as api from '../api'
 import SourceList from '../components/SourceList'
+import { FONT_SIZES } from '../theme'
 
 const Placeholder = ({ children }) => (
-  <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', fontSize: '0.875rem', textAlign: 'center', px: 2 }}>{children}</Box>
+  <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', fontSize: FONT_SIZES.md, textAlign: 'center', px: 2 }}>{children}</Box>
 )
 
 // 대화 한 턴. turn = { role: 'user'|'assistant', content, sources?, found?, top_score?, search_query?, latency_ms?, error? }
@@ -14,7 +15,7 @@ const Turn = ({ turn, running, selected, onSelect }) => {
   if (turn.role === 'user') {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
-        <Box sx={{ maxWidth: '85%', px: 1.5, py: 0.75, borderRadius: 2, backgroundColor: 'primary.main', color: 'primary.contrastText', whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: '0.9375rem' }}>{turn.content}</Box>
+        <Box sx={{ maxWidth: '85%', px: 1.5, py: 0.75, borderRadius: 2, backgroundColor: 'primary.main', color: 'primary.contrastText', whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: FONT_SIZES.lg }}>{turn.content}</Box>
       </Box>
     )
   }
@@ -29,19 +30,19 @@ const Turn = ({ turn, running, selected, onSelect }) => {
     >
       {turn.search_query && turn.search_query !== turn.question && (
         <Tooltip title="이어지는 질문이라 이전 대화를 반영해 이 문장으로 검색했습니다">
-          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mb: 0.5 }}>검색: {turn.search_query}</Typography>
+          <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.secondary', mb: 0.5 }}>검색: {turn.search_query}</Typography>
         </Tooltip>
       )}
       {turn.content
         ? (
-          <Box sx={{ lineHeight: 1.7, fontSize: '0.9375rem', '& > :first-of-type': { mt: 0 }, '& > :last-child': { mb: 0 } }}>
+          <Box sx={{ lineHeight: 1.7, fontSize: FONT_SIZES.lg, '& > :first-of-type': { mt: 0 }, '& > :last-child': { mb: 0 } }}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.content}</ReactMarkdown>
           </Box>
         )
         : running && <Typography sx={{ color: 'text.secondary' }}>생성 중…</Typography>}
       {turn.error && <Alert severity="error" sx={{ mt: 1 }}>{turn.error}</Alert>}
       {(!running || turn.content) && (
-        <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.75 }}>
+        <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.secondary', mt: 0.75 }}>
           {running ? '생성 중…' : (turn.latency_ms != null ? `${(turn.latency_ms / 1000).toFixed(1)}s` : '')}
           {!running && turn.sources?.length > 0 && ` · 출처 ${turn.sources.length}건`}
           {turn.found === false && ' · 관련 문서를 찾지 못함'}
