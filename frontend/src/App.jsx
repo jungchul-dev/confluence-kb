@@ -22,7 +22,7 @@ const NavItem = ({ label, isActive, onClick }) => (
     onClick={onClick}
     sx={{
       display: 'flex', alignItems: 'center', height: 34, px: 1.25, mb: 0.25,
-      borderRadius: 1.5, cursor: 'pointer', fontSize: FONT_SIZES.md, fontWeight: 500,
+      borderRadius: 1.5, cursor: 'pointer', fontSize: FONT_SIZES.lg, fontWeight: 500,
       backgroundColor: isActive ? SELECTED_BG : 'transparent',
       color: isActive ? STRONG_TEXT : MUTED_TEXT,
       transition: 'background-color 0.12s, color 0.12s',
