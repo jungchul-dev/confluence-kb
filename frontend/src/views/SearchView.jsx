@@ -72,7 +72,7 @@ export default function SearchView({ space }) {
   const submit = async (e) => {
     e?.preventDefault()
     if (!q.trim() || loading) return
-    setLoading(true); setError(''); setSelected(null); setRelated({})
+    setLoading(true); setError(''); setSelected(null); setRelated({}); setPassed(true)
     try {
       const data = await api.search(q.trim(), 20, space)
       setResults(data.results); setPassed(data.passed); setSearched(true)
