@@ -46,11 +46,11 @@ const RelevanceBar = ({ score }) => {
 const RankBadge = ({ label, rank, both, tip }) => {
   const c = rank == null ? null : both ? '#16a34a' : '#71717a'
   return (
-    <Tooltip title={rank == null ? `${label} 검색 상위 후보에 없음` : `${tip} — ${rank}위`}>
+    <Tooltip title={rank == null ? `${label} 검색 상위 후보 밖` : `${tip} — ${rank}위`}>
       <Chip
         size="small"
         variant={rank == null ? 'outlined' : 'filled'}
-        label={rank == null ? `${label} 없음` : `${label} ${rank}위`}
+        label={rank == null ? `${label} 밖` : `${label} ${rank}위`}
         sx={{ fontSize: FONT_SIZES.xs, height: 22, flexShrink: 0, ...(rank == null ? { color: 'text.disabled', borderStyle: 'dashed' } : { backgroundColor: c, color: '#fff' }) }}
       />
     </Tooltip>
