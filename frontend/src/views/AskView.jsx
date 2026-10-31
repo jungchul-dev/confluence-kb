@@ -51,7 +51,7 @@ const Turn = ({ turn, running, selected, onSelect }) => {
   )
 }
 
-export default function AskView() {
+export default function AskView({ space }) {
   const [question, setQuestion] = useState('')
   const [turns, setTurns] = useState([])          // 대화 전체 (서버에는 이전 턴을 history 로 보낸다)
   const [selected, setSelected] = useState(null)  // 출처를 보여줄 답변 턴의 index (기본: 마지막)
@@ -59,6 +59,8 @@ export default function AskView() {
   const [error, setError] = useState('')
   const abortRef = useRef(null)
   const listRef = useRef(null)
+
+  useEffect(() => { abortRef.current?.abort(); setTurns([]); setSelected(null); setError('') }, [space])
 
   // 새 조각이 올 때마다 대화 목록을 아래로 붙인다
   useEffect(() => {
@@ -87,6 +89,7 @@ export default function AskView() {
       const result = await api.ask(q, {
         history,
         signal: controller.signal,
+        spaceKeys: space,
         onMeta: (m) => updateLast((t) => ({ ...t, sources: m.sources, found: m.found, top_score: m.top_score, search_query: m.search_query, content: m.found === false ? (m.answer || '') : t.content })),
         onDelta: (d) => updateLast((t) => ({ ...t, content: t.content + d })),
       })
