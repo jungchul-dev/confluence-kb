@@ -20,10 +20,12 @@ router = APIRouter(tags=["search"])
 async def search(
     q: str = Query(..., min_length=1, max_length=2000),
     k: int = Query(10, ge=1, le=50),
+    space_key: Optional[str] = Query(None, description="특정 공간만 검색. 콤마로 여러 개 지정. 없으면 전체."),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    candidates = await hybrid_search(db, q, user)
+    space_keys = [s.strip() for s in space_key.split(",") if s.strip()] if space_key else None
+    candidates = await hybrid_search(db, q, user, space_keys=space_keys)
     top, passed = await rerank(q, candidates, top_k=k)
     return {
         "passed": passed,
