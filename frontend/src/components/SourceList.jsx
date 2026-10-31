@@ -29,7 +29,7 @@ export default function SourceList({ sources, cited }) {
               <Chip size="small" label={s.kind === 'attachment' ? '첨부' : '페이지'} color={s.kind === 'attachment' ? 'success' : 'primary'} variant="filled" sx={{ flexShrink: 0 }} />
               <Typography noWrap sx={{ fontWeight: 500, minWidth: 0 }}>{s.title}</Typography>
               {!isCited && (
-                <Tooltip title="검색 후보에는 올랐지만 답변 본문에서 [n] 으로 인용되지 않은 문서입니다">
+                <Tooltip title="검색 후보에는 올랐지만 답변에 인용되지 않은 문서입니다">
                   <Chip size="small" label="미인용" variant="outlined" sx={{ ml: 'auto', flexShrink: 0, color: 'text.disabled', borderStyle: 'dashed', height: 22, fontSize: '0.75rem' }} />
                 </Tooltip>
               )}
