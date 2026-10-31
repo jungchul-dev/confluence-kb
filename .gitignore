@@ -17,3 +17,5 @@ backend/worker/seed_sample.py
 frontend/package-lock.json
 frontend/node_modules/
 frontend/dist/
+
+docs/slide/ConfluenceKB.html

@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사내 문서 AI 검색, 이렇게 동작합니다</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="deck"></div>
+<div id="modal"><div class="modal-inner"><button class="close" onclick="document.getElementById('modal').classList.remove('on')">✕</button><div class="svgwrap"></div><div class="modal-title"></div></div></div>
+<script>
+/* ───────── 다이어그램 빌더 ─────────
+   노드 종류
+     (기본)  제목 + 보조 줄, 가운데 정렬. tone:true 면 연한 색 배경. shape:'db' 는 원통
+     text    왼쪽 정렬 줄 목록. [[강조]] = 노드 색, {{강조}} = 주황
+     rows    [라벨, 값] 표
+     bars    [이름, 점수, 색, 메모] 막대
+     chips   [라벨, [조각…]] 단어 조각.  *강조  ~떼어냄  !잘못 쪼개짐  →화살표  >메모
+     doc     문서 모양 (sections)
+     panel   제목만 있는 빈 판 (extras 로 내용을 그린다)
+*/
+const TINT={blue:'#2563eb',green:'#16a34a',amber:'#d97706',violet:'#7c3aed',rose:'#e11d48',neutral:'#52525b'};
+const SOFT={blue:'#eff4ff',green:'#effaf2',amber:'#fff6e8',violet:'#f5f0ff',rose:'#fff1f3',neutral:'#f6f6f7'};
+const EDGE_SOFT={blue:'#bfd2fb',green:'#b7e4c4',amber:'#f6d39d',violet:'#d9c8fb',rose:'#fbc3cf',neutral:'#e4e4e7'};
+const SPEED=.35;
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const tw=(s,fs=14)=>[...String(s)].reduce((a,ch)=>a+(ch.charCodeAt(0)>0x7f?fs*1.0:fs*.56),0);
+const mk=(s,col)=>esc(s).replace(/\[\[(.+?)\]\]/g,`<tspan fill="${col}" font-weight="700">$1</tspan>`).replace(/\{\{(.+?)\}\}/g,`<tspan fill="${TINT.amber}" font-weight="700">$1</tspan>`);
+const side=(n,s,p=.5)=>s==='r'?[n.x+n.w,n.y+n.h*p]:s==='l'?[n.x,n.y+n.h*p]:s==='t'?[n.x+n.w*p,n.y]:[n.x+n.w*p,n.y+n.h];
+const autoSide=(n,p)=>{const dx=p[0]-(n.x+n.w/2),dy=p[1]-(n.y+n.h/2);return Math.abs(dx)>Math.abs(dy)?(dx>0?'r':'l'):(dy>0?'b':'t')};
+function route(e,m){
+  const a=m[e.from],b=m[e.to]; if(!a||!b) throw new Error('edge '+e.from+'→'+e.to);
+  const via=e.via||[], ac=[a.x+a.w/2,a.y+a.h/2], bc=[b.x+b.w/2,b.y+b.h/2];
+  const fs=e.fromSide||autoSide(a,via[0]||bc), ts=e.toSide||autoSide(b,via[via.length-1]||ac);
+  const s=side(a,fs,e.fromPos??.5), t=side(b,ts,e.toPos??.5);
+  let pts=[s,...via,t];
+  if(!via.length){
+    const h1=fs==='l'||fs==='r', h2=ts==='l'||ts==='r';
+    if(h1&&h2){ if(Math.abs(s[1]-t[1])>1){const mx=(s[0]+t[0])/2;pts=[s,[mx,s[1]],[mx,t[1]],t];} }
+    else if(!h1&&!h2){ if(Math.abs(s[0]-t[0])>1){const my=(s[1]+t[1])/2;pts=[s,[s[0],my],[t[0],my],t];} }
+    else if(h1) pts=[s,[t[0],s[1]],t]; else pts=[s,[s[0],t[1]],t];
+  }
+  return pts;
+}
+const pathD=p=>p.map((q,i)=>(i?'L':'M')+q[0]+' '+q[1]).join(' ');
+const plen=p=>{let L=0;for(let i=1;i<p.length;i++)L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);return L};
+function pmid(p){const h=plen(p)/2;let a=0;for(let i=1;i<p.length;i++){const s=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);if(a+s>=h){const r=(h-a)/s;return [p[i-1][0]+(p[i][0]-p[i-1][0])*r,p[i-1][1]+(p[i][1]-p[i-1][1])*r]}a+=s}return [p[0][0],p[0][1]]}
+const star=(cx,cy,r)=>{let d='';for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;d+=(i?'L':'M')+(cx+rr*Math.cos(a)).toFixed(1)+' '+(cy+rr*Math.sin(a)).toFixed(1)}return d+'Z'};
+
+function frame(n,col){
+  const fill=n.tone?SOFT[n.color]:'#fff', stroke=n.strong?col:(n.tone?EDGE_SOFT[n.color]:'#e4e4e7');
+  if(n.shape==='db'){const cx=n.x+n.w/2;return `<path d="M${n.x} ${n.y+14} a${n.w/2} 14 0 0 1 ${n.w} 0 v${n.h-28} a${n.w/2} 14 0 0 1 -${n.w} 0 z" fill="${SOFT[n.color]}" stroke="${EDGE_SOFT[n.color]}" stroke-width="2"/><ellipse cx="${cx}" cy="${n.y+14}" rx="${n.w/2}" ry="14" fill="#fff" stroke="${EDGE_SOFT[n.color]}" stroke-width="2"/>`}
+  return `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="16" fill="${fill}" stroke="${stroke}" stroke-width="${n.strong?2.4:1.6}"/>`;
+}
+const head=(n,col)=>n.title?`<text x="${n.x+24}" y="${n.y+38}" font-size="${n.tfs||17}" font-weight="700" fill="${col}">${mk(n.title,col)}</text>`:'';
+const lnT=(t,k)=>`style="--t:${(t+.15+k*.07).toFixed(2)}s"`;
+
+function renderNode(n){
+  const col=TINT[n.color]||TINT.neutral, t0=(n.t||0)*SPEED;
+  let inner='';
+  if(n.kind==='text'){
+    const fs=n.fs||19, lh=n.lh||Math.round(fs*1.7);
+    inner+=head(n,col);
+    let y=n.y+(n.title?78:44);
+    (n.lines||[]).forEach((ln,k)=>{
+      if(ln!=='') inner+=`<g class="ln" ${lnT(t0,k)}><text x="${n.x+24}" y="${y}" font-size="${fs}" font-weight="500" fill="#27272a" style="white-space:pre${n.mono?';font-family:var(--mono)':''}">${mk(ln,col)}</text></g>`;
+      y+=lh;
+    });
+  }else if(n.kind==='rows'){
+    const fs=n.fs||19, lh=n.lh||60, lw=n.lw||170;
+    inner+=head(n,col);
+    let y=n.y+(n.title?92:48);
+    (n.rows||[]).forEach((r,k)=>{
+      inner+=`<g class="ln" ${lnT(t0,k)}>
+        ${k?`<line x1="${n.x+20}" y1="${y-lh/2-8}" x2="${n.x+n.w-20}" y2="${y-lh/2-8}" stroke="#f0f0f2" stroke-width="1.5"/>`:''}
+        <text x="${n.x+24}" y="${y}" font-size="${fs-2}" font-weight="700" fill="#71717a">${esc(r[0])}</text>
+        <text x="${n.x+24+lw}" y="${y}" font-size="${fs}" font-weight="500" fill="#18181b" ${r[2]?'style="font-family:var(--mono)"':''}>${mk(r[1],col)}</text></g>`;
+      y+=lh;
+    });
+  }else if(n.kind==='bars'){
+    inner+=head(n,col);
+    const lw=n.lw||250, bx=n.x+24+lw, bw=n.w-48-lw-70;
+    let y=n.y+(n.title?96:52);
+    (n.items||[]).forEach((it,k)=>{
+      const c=it[2]==='neutral'?'#a1a1aa':(TINT[it[2]]||'#a1a1aa');
+      inner+=`<g class="ln" ${lnT(t0,k*1.5)}>
+        <text x="${n.x+24}" y="${y}" font-size="19" font-weight="600" fill="#18181b">${esc(it[0])}</text>
+        ${it[3]?`<text x="${n.x+24}" y="${y+22}" font-size="14" font-weight="600" fill="${c}">${esc(it[3])}</text>`:''}
+        <rect x="${bx}" y="${y-16}" width="${bw}" height="20" rx="10" fill="#f4f4f5"/>
+        <rect x="${bx}" y="${y-16}" width="${(bw*it[1]).toFixed(1)}" height="20" rx="10" fill="${c}"/>
+        <text x="${bx+bw+14}" y="${y}" font-size="19" font-weight="500" fill="${c}" style="font-family:var(--mono)">${it[1].toFixed(2)}</text></g>`;
+      y+=n.lh||64;
+    });
+  }else if(n.kind==='chips'){
+    inner+=head(n,col);
+    const lw=n.lw||200, fs=n.fs||19;
+    let y=n.y+(n.title?72:30);
+    (n.rows||[]).forEach((r,k)=>{
+      let x=n.x+24+lw, g='';
+      g+=`<text x="${n.x+24}" y="${y+26}" font-size="16" font-weight="700" fill="#71717a">${esc(r[0])}</text>`;
+      r[1].forEach(raw=>{
+        const p=raw[0], marked='*~!>'.includes(p), s=marked?raw.slice(1):raw;
+        if(raw==='→'){g+=`<text x="${x+4}" y="${y+27}" font-size="22" fill="#a1a1aa">→</text>`;x+=36;return}
+        if(p==='>'){g+=`<text x="${x+4}" y="${y+26}" font-size="17" font-weight="600" fill="${TINT.amber}">${esc(s)}</text>`;x+=tw(s,17)+16;return}
+        const w=tw(s,fs)+26;
+        const [bg,fg,deco]=p==='*'?[SOFT.blue,TINT.blue,'']:p==='~'?['#f4f4f5','#a1a1aa','line-through']:p==='!'?[SOFT.rose,TINT.rose,'']:['#fff','#27272a',''];
+        g+=`<rect x="${x}" y="${y}" width="${w}" height="40" rx="10" fill="${bg}" stroke="${marked?'none':'#e4e4e7'}"/>
+            <text x="${x+w/2}" y="${y+27}" font-size="${fs}" font-weight="600" text-anchor="middle" fill="${fg}" ${deco?`text-decoration="${deco}"`:''}>${esc(s)}</text>`;
+        x+=w+10;
+      });
+      inner+=`<g class="ln" ${lnT(t0,k*2)}>${g}</g>`;
+      y+=n.lh||64;
+    });
+  }else if(n.kind==='doc'){
+    inner+=`<text x="${n.x+24}" y="${n.y+42}" font-size="21" font-weight="700" fill="#18181b">${esc(n.title)}</text>
+      <text x="${n.x+24}" y="${n.y+66}" font-size="14" font-weight="500" fill="#a1a1aa">${esc(n.sub||'')}</text>`;
+    let y=n.y+88;
+    (n.sections||[]).forEach((s,k)=>{
+      const hi=s.hi, bg=hi?SOFT.blue:'#fafafa', st=hi?EDGE_SOFT.blue:'#f0f0f2';
+      let bars='';
+      for(let i=0;i<s.lines;i++){const w=(n.w-80)*(i===s.lines-1?.55:.92-(i%2)*.12);bars+=`<rect x="${n.x+38}" y="${y+46+i*20}" width="${w.toFixed(0)}" height="8" rx="4" fill="${hi?'#c9d8fb':'#e4e4e7'}"/>`}
+      inner+=`<g class="ln" ${lnT(t0,k)}><rect x="${n.x+16}" y="${y}" width="${n.w-32}" height="${s.h}" rx="10" fill="${bg}" stroke="${st}" stroke-width="1.5"/>
+        <text x="${n.x+38}" y="${y+30}" font-size="17" font-weight="700" fill="${hi?TINT.blue:'#52525b'}">${esc(s.label)}</text>${bars}</g>`;
+      y+=s.h+12;
+    });
+  }else if(n.kind==='panel'){
+    inner+=head(n,col);
+  }else{
+    const subs=n.sub?String(n.sub).split('\n'):[], cx=n.x+n.w/2, fs=n.fs||23, sl=24;
+    const ty=n.y+n.h/2-(subs.length*sl)/2+(subs.length?2:8)+(n.shape==='db'?10:0);
+    inner+=`<text x="${cx}" y="${ty}" font-size="${fs}" font-weight="700" letter-spacing="-.01em" text-anchor="middle" fill="#18181b">${esc(n.title)}</text>
+      ${subs.map((s,k)=>`<text x="${cx}" y="${ty+30+k*sl}" font-size="17" font-weight="500" text-anchor="middle" fill="#71717a">${mk(s,col)}</text>`).join('')}`;
+  }
+  return `<g class="n" style="--t:${t0.toFixed(2)}s">${frame(n,col)}${inner}</g>`;
+}
+
+function diagram(spec){
+  const w=spec.w||1380,h=spec.h||730,m={};
+  (spec.groups||[]).forEach(g=>m[g.id]=g);(spec.nodes||[]).forEach(n=>m[n.id]=n);
+  let out='';
+  (spec.groups||[]).forEach(g=>{
+    const gc=TINT[g.color]||'#71717a';
+    out+=`<g class="g-grp" style="--t:${((g.t||0)*SPEED).toFixed(2)}s"><rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="18" fill="${SOFT[g.color]||'#fafafa'}" stroke="${EDGE_SOFT[g.color]||'#e4e4e7'}" stroke-width="1.5" stroke-dasharray="6 6"/>
+      <text x="${g.x+24}" y="${g.y+36}" font-size="19" font-weight="700" fill="${gc}">${esc(g.label||'')}</text></g>`;
+  });
+  (spec.edges||[]).forEach(e=>{
+    const pts=route(e,m),d=pathD(pts),t=+((e.t||0)*SPEED).toFixed(2),t2=(t+.35).toFixed(2),dur=Math.max(1.1,Math.min(2.2,plen(pts)/300)).toFixed(2);
+    const col=TINT[e.color]||TINT.blue;
+    out+=`<g><path d="${d}" pathLength="1" fill="none" stroke="#d4d4d8" stroke-width="2.4" class="e-draw" style="--t:${t}s" stroke-linejoin="round"/>
+      <path d="${d}" fill="none" stroke="${col}" stroke-width="2.6" class="e-flow" style="--t2:${t2}s" marker-end="url(#m-${col.slice(1)})" stroke-linejoin="round"/>
+      ${e.noPacket?'':`<circle r="6" fill="${col}" class="pk" style="--t2:${t2}s;--dur:${dur}s;offset-path:path('${d}')"/>`}`;
+    if(e.label){
+      const [mx,my]=pmid(pts),lw=tw(e.label,16)+26,lh=34;
+      const lx=e.lx??mx-lw/2,ly=e.ly??my-lh/2;
+      out+=`<g class="e-lbl" style="--t2:${t2}s"><rect x="${lx}" y="${ly}" width="${lw}" height="${lh}" rx="17" fill="#fff" stroke="${EDGE_SOFT[e.color]||EDGE_SOFT.blue}" stroke-width="1.5"/>
+        <text x="${lx+lw/2}" y="${ly+23}" font-size="16" font-weight="600" text-anchor="middle" fill="${col}">${esc(e.label)}</text></g>`;
+    }
+    out+='</g>';
+  });
+  (spec.nodes||[]).forEach(n=>out+=renderNode(n));
+  (spec.extras||[]).forEach(x=>out+=`<g class="note" style="--t:${((x.t||0)*SPEED).toFixed(2)}s">${x.svg}</g>`);
+  (spec.notes||[]).forEach(n=>{
+    out+=`<g class="note" style="--t:${((n.t||0)*SPEED).toFixed(2)}s"><text x="${n.x}" y="${n.y}" font-size="${n.fs||17}" font-weight="500" fill="${TINT[n.color]||'#71717a'}" ${n.anchor?`text-anchor="${n.anchor}"`:''}>${mk(n.text,TINT.blue)}</text></g>`;
+  });
+  const markers=Object.values(TINT).map(c=>`<marker id="m-${c.slice(1)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${c}"/></marker>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" font-family="inherit"><defs>${markers}</defs>${out}</svg>`;
+}
+
+/* ───────── 임베딩 장표의 '뜻 지도' ───────── */
+const pt=(x,y,c,label,dx=16)=>`<circle cx="${x}" cy="${y}" r="10" fill="${c}"/><text x="${x+dx}" y="${y+6}" font-size="18" font-weight="600" fill="#27272a" ${dx<0?'text-anchor="end"':''}>${label}</text>`;
+const MAP_EXTRAS=[
+  {t:1.8,svg:`<circle cx="960" cy="270" r="140" fill="${SOFT.blue}" stroke="${EDGE_SOFT.blue}" stroke-width="2" stroke-dasharray="6 6"/>
+     <text x="960" y="116" font-size="18" font-weight="700" fill="${TINT.blue}" text-anchor="middle">장애 · 오류 이야기</text>`},
+  {t:2.1,svg:pt(905,225,TINT.blue,'장애 → PM 보고')},
+  {t:2.4,svg:pt(1005,300,TINT.blue,'오류 시 연락 절차')},
+  {t:2.7,svg:`<circle cx="1180" cy="510" r="100" fill="${SOFT.green}" stroke="${EDGE_SOFT.green}" stroke-width="2" stroke-dasharray="6 6"/>
+     <text x="1180" y="396" font-size="18" font-weight="700" fill="${TINT.green}" text-anchor="middle">사내 생활 안내</text>`},
+  {t:2.9,svg:pt(1140,488,TINT.green,'회의실 예약')},
+  {t:3.0,svg:pt(1215,550,TINT.green,'식대 정산',-16)},
+  {t:3.8,svg:`<path d="${star(940,360,20)}" fill="${TINT.amber}"/><text x="968" y="368" font-size="19" font-weight="700" fill="${TINT.amber}">질문</text>
+     <line x1="935" y1="340" x2="908" y2="240" stroke="${TINT.amber}" stroke-width="2.4" stroke-dasharray="5 5"/>`},
+  {t:4.2,svg:`<text x="1060" y="672" font-size="17" font-weight="500" fill="#71717a" text-anchor="middle">점이 가까울수록 뜻이 비슷합니다 · 질문(★)과 가까운 글을 찾아옵니다</text>`},
+];
+
+/* ───────── 클러스터링 장표의 문서 지도 ───────── */
+const rnd=seed=>{let x=seed;return()=>{x=(x*9301+49297)%233280;return x/233280}};
+const dots=(cx,cy,n,seed,sp,c)=>{const r=rnd(seed);let o='';for(let i=0;i<n;i++){const a=r()*6.283,d=Math.sqrt(r())*sp;o+=`<circle cx="${(cx+Math.cos(a)*d).toFixed(0)}" cy="${(cy+Math.sin(a)*d*.8).toFixed(0)}" r="8" fill="${c}"/>`}return o};
+const CL=[[190,190,9,11,75,'blue'],[445,215,8,23,70,'green'],[310,375,7,37,62,'violet']];
+const halo=(c)=>`<ellipse cx="${c[0]}" cy="${c[1]}" rx="${c[4]+28}" ry="${(c[4]+28)*.8}" fill="${SOFT[c[5]]}" stroke="${EDGE_SOFT[c[5]]}" stroke-width="2" stroke-dasharray="6 6"/>`;
+const CLUSTER_EXTRAS=[
+  {t:1.2,svg:CL.map(c=>dots(c[0],c[1],c[2],c[3],c[4],'#a1a1aa')).join('')},
+  {t:2.8,svg:CL.map(c=>halo(c)+dots(c[0],c[1],c[2],c[3],c[4],TINT[c[5]])).join('')},
+  {t:4.6,svg:`<text x="190" y="104" font-size="17" font-weight="700" fill="${TINT.blue}" text-anchor="middle">장애 대응 · 운영</text>
+     <text x="445" y="130" font-size="17" font-weight="700" fill="${TINT.green}" text-anchor="middle">클라우드 인프라</text>
+     <text x="205" y="400" font-size="17" font-weight="700" fill="${TINT.violet}" text-anchor="end">MES 제안 · 견적</text>`},
+];
+
+const Q='장애 나면 누구한테 에스컬레이션해?';
+
+const AGENDA=[
+  ['01','한눈에 보기','전체 흐름'],
+  ['02','문서 나누기','청킹'],
+  ['03','숫자로 바꾸기','임베딩'],
+  ['04','저장하기','DB 구성'],
+  ['05','저장소에 더한 도구','pgvector · 형태소 분석'],
+  ['06','찾기','리트리벌'],
+  ['07','다시 고르기','리랭킹'],
+  ['08','답하기','답변 생성'],
+  ['09','주제별로 묶기','클러스터링'],
+];
+
+const SLIDES=[
+{kind:'title'},
+
+/* 1 한눈에 보기 */
+{num:'01',crumb:'한눈에 보기',title:'한눈에 보기',
+ lead:'미리 문서를 정리해 두고, 질문이 오면 관련 글을 찾아서 AI 가 답합니다',
+ easy:'AI 가 모든 문서를 외우는 게 아닙니다. 질문할 때마다 <b>관련 글을 찾아</b> 건네주고, <b>"이 글만 보고 답해"</b> 라고 시킵니다.',
+ ko:['한국어 검색이 잘 되도록 단계마다 손을 봤습니다','어떤 부분인지는 장표마다 이 칸에서 설명합니다'],
+ notes:'위쪽은 평소에 자동으로 돌아가는 준비 작업, 아래쪽은 질문할 때 일어나는 일입니다. 도서관에 책을 정리해 꽂아 두고, 질문이 오면 찾아서 읽고 답한다고 생각하면 됩니다.',
+ diagram:{groups:[
+   {id:'g1',x:20,y:20,w:1340,h:310,label:'① 미리 정리해 두기 (자동으로 주기적으로)',color:'green',t:0},
+   {id:'g2',x:20,y:400,w:1340,h:310,label:'② 질문하면 (몇 초 안에)',color:'blue',t:2.4},
+ ],nodes:[
+   {id:'conf',x:60,y:100,w:250,h:180,title:'Confluence',sub:'제안서 · 회의록\n첨부파일',color:'neutral',t:.3},
+   {id:'split',x:390,y:100,w:250,h:180,title:'잘게 나누기',sub:'소제목 단위\n조각으로',color:'green',t:.8},
+   {id:'emb',x:720,y:100,w:250,h:180,title:'숫자로 바꾸기',sub:'뜻을\n좌표로',color:'green',t:1.3},
+   {id:'db',x:1050,y:90,w:270,h:200,title:'저장소',sub:'조각 + 숫자\n+ 검색 단어',color:'violet',shape:'db',t:1.8},
+   {id:'q',x:60,y:480,w:230,h:180,title:'질문',sub:'"장애 나면 누구한테\n에스컬레이션해?"',color:'amber',tone:true,t:2.7},
+   {id:'find',x:340,y:480,w:220,h:180,title:'찾기',sub:'관련 있어 보이는\n글 50개',color:'blue',t:3.1},
+   {id:'pick',x:610,y:480,w:220,h:180,title:'다시 고르기',sub:'진짜 관련된\n5개만',color:'rose',t:3.6},
+   {id:'ai',x:880,y:480,w:200,h:180,title:'AI 가 답변',sub:'고른 글만\n보고 작성',color:'blue',t:4.1},
+   {id:'ans',x:1130,y:480,w:200,h:180,title:'답변 + 출처',sub:'원문 링크\n[1] [2]',color:'green',tone:true,t:4.6},
+ ],edges:[
+   {from:'conf',to:'split',t:.6,color:'green'},{from:'split',to:'emb',t:1.1,color:'green'},{from:'emb',to:'db',t:1.6,color:'green'},
+   {from:'q',to:'find',t:2.9},{from:'find',to:'pick',t:3.4},{from:'pick',to:'ai',t:3.9},{from:'ai',to:'ans',t:4.4,color:'green'},
+   {from:'db',to:'find',fromSide:'b',toSide:'t',via:[[1185,365],[450,365]],t:3.2,color:'violet',label:'저장소에서 찾기'},
+ ]}},
+
+/* 2 문서 나누기 */
+{num:'02',crumb:'문서 나누기',title:'문서 나누기',tech:'청킹',
+ lead:'긴 문서를 통째로 주면 핵심을 놓칩니다. 찾기 좋은 크기로 잘라 둡니다',
+ easy:'책에 포스트잇을 붙이는 것과 같습니다. 조각마다 <b>"어느 문서, 어느 소제목"</b> 인지 꼬리표를 달아 두어서, 조각 하나만 봐도 출처를 압니다.',
+ ko:['문장은 <b>"~다."</b> 로 끝나는 곳에서 자릅니다. 말이 중간에 끊기지 않게요','표는 <b>"담당: 운영 PM"</b> 처럼 문장으로 풀어서 저장합니다'],
+ notes:'문서 한 개를 소제목별로 자르고, 너무 길면 문장 끝에서 한 번 더 자릅니다. 주황색 문장은 앞 조각의 마지막 문장을 다음 조각에도 붙여 둔 것입니다. 문맥이 끊기지 않게 하기 위해서입니다.',
+ diagram:{nodes:[
+   {id:'doc',x:40,y:40,w:400,h:650,kind:'doc',title:'스마트팩토리 MES 구축 제안',sub:'Confluence 페이지 하나',color:'neutral',t:0,sections:[
+     {label:'1. 개요',h:70,lines:1},{label:'2. 추진 일정',h:70,lines:1},{label:'3. 비용',h:70,lines:1},
+     {label:'4. 장애 대응 체계',h:190,lines:7,hi:true},{label:'5. 운영 조직',h:90,lines:2}]},
+   {id:'s1',x:500,y:90,w:240,h:140,title:'소제목마다',sub:'자르기',color:'blue',t:1.0},
+   {id:'s2',x:500,y:295,w:240,h:140,title:'길면 한 번 더',sub:'문장이 끝나는 곳에서',color:'blue',t:1.6},
+   {id:'s3',x:500,y:500,w:240,h:140,title:'꼬리표 달기',sub:'[문서 > 소제목]',color:'violet',t:2.2},
+   {id:'c1',x:800,y:40,w:540,h:200,kind:'text',title:'조각 1',fs:18,lh:34,color:'blue',t:2.8,lines:[
+     '[[[MES 구축 제안 > 4. 장애 대응 체계]]]',
+     '장애가 나면 담당자가 30분 안에 응답한다.',
+     '응답이 없으면 운영 PM 에게 에스컬레이션한다.',
+     '{{복구 후에는 결과를 운영 회의에 보고한다.}}']},
+   {id:'c2',x:800,y:270,w:540,h:200,kind:'text',title:'조각 2',fs:18,lh:34,color:'blue',t:3.3,lines:[
+     '[[[MES 구축 제안 > 4. 장애 대응 체계]]]',
+     '{{복구 후에는 결과를 운영 회의에 보고한다.}}',
+     '단계: 1차 | 담당: 운영 담당자 | 시한: 30분',
+     '단계: 2차 | 담당: 운영 PM | 시한: 1시간']},
+   {id:'c3',x:800,y:500,w:540,h:160,kind:'text',title:'조각 3',fs:18,lh:34,color:'blue',t:3.8,lines:[
+     '[[[MES 구축 제안 > 5. 운영 조직]]]',
+     '운영 조직은 PM 1명, 엔지니어 3명으로 …']},
+ ],edges:[
+   {from:'doc',to:'s1',fromSide:'r',fromPos:.6,toSide:'l',t:.8},
+   {from:'s1',to:'s2',t:1.4},{from:'s2',to:'s3',t:2.0,color:'violet'},
+   {from:'s3',to:'c1',fromSide:'r',toSide:'l',via:[[770,570],[770,140]],t:2.6,color:'violet',noPacket:true},
+   {from:'s3',to:'c2',fromSide:'r',toSide:'l',via:[[770,570],[770,370]],t:3.1,color:'violet',noPacket:true},
+   {from:'s3',to:'c3',fromSide:'r',toSide:'l',t:3.6,color:'violet'},
+ ],notes:[
+   {x:1340,y:700,anchor:'end',fs:16,color:'amber',text:'주황 문장 = 앞 조각의 끝 문장을 다음 조각에도 붙여 문맥이 안 끊기게',t:4.2},
+ ]}},
+
+/* 3 숫자로 바꾸기 */
+{num:'03',crumb:'숫자로 바꾸기',title:'숫자로 바꾸기',tech:'임베딩',
+ lead:'컴퓨터는 글의 뜻을 모릅니다. 그래서 글을 숫자로 바꿔 지도 위 위치로 만듭니다',
+ easy:'주소를 지도에 찍는 것과 같습니다. <b>단어가 달라도 뜻이 비슷하면</b> 가까운 동네에 찍힙니다. "장애"와 "오류"가 이웃이 됩니다.',
+ ko:['한국어를 잘 아는 <b>다국어 모델</b>을 씁니다','한국어 질문으로 한국어 문서를 바로 비교할 수 있습니다'],
+ notes:'조각마다 숫자 1,024개짜리 묶음이 생깁니다. 사람이 보기엔 의미 없는 숫자지만, 뜻이 비슷한 글끼리는 숫자도 비슷합니다. 질문도 같은 방식으로 바꿔서 가까운 글을 찾습니다.',
+ diagram:{nodes:[
+   {id:'e1',x:40,y:50,w:360,h:100,title:'장애가 나면 PM 에게 보고한다',fs:19,color:'blue',t:0},
+   {id:'e2',x:40,y:180,w:360,h:100,title:'시스템 오류 시 연락 절차',fs:19,color:'blue',t:.2},
+   {id:'e3',x:40,y:310,w:360,h:100,title:'회의실 예약은 그룹웨어에서',fs:19,color:'green',t:.4},
+   {id:'q',x:40,y:530,w:360,h:130,title:'질문도 똑같이',sub:'"장애 나면 누구한테\n에스컬레이션해?"',color:'amber',tone:true,t:3.3},
+   {id:'model',x:470,y:300,w:240,h:150,title:'변환 모델',sub:'글 → 숫자 묶음',color:'amber',strong:true,t:.9},
+   {id:'vec',x:460,y:60,w:260,h:150,kind:'text',title:'예: 첫 번째 문장',mono:true,fs:16,lh:28,color:'amber',t:1.4,lines:['[0.02, -0.11,','  0.08, 0.05, …]','총 [[1,024]]개 숫자']},
+   {id:'map',x:780,y:40,w:560,h:650,kind:'panel',title:'뜻 지도',color:'neutral',t:1.6},
+ ],edges:[
+   {from:'e1',to:'model',fromSide:'r',toSide:'l',toPos:.25,t:.6,noPacket:true,color:'amber'},
+   {from:'e2',to:'model',fromSide:'r',toSide:'l',toPos:.5,t:.7,noPacket:true,color:'amber'},
+   {from:'e3',to:'model',fromSide:'r',toSide:'l',toPos:.75,t:.8,noPacket:true,color:'amber'},
+   {from:'model',to:'vec',fromSide:'t',toSide:'b',t:1.2,color:'amber',noPacket:true},
+   {from:'model',to:'map',fromSide:'r',toSide:'l',toPos:.52,t:1.5,color:'amber',label:'위치 찍기'},
+   {from:'q',to:'model',fromSide:'r',toSide:'b',t:3.5,color:'amber'},
+ ],extras:MAP_EXTRAS}},
+
+/* 4 저장하기 */
+{num:'04',crumb:'저장하기',title:'저장하기',tech:'DB 구성',
+ lead:'나눈 조각을 한 줄씩 저장합니다. 찾을 때 필요한 정보를 한곳에 모아 둡니다',
+ easy:'도서관 카드 목록과 같습니다. <b>뜻으로 찾는 색인</b>과 <b>단어로 찾는 색인</b>을 따로 만들어 두고, 볼 수 있는 사람도 함께 적어 둡니다.',
+ ko:['검색 단어 칸에는 <b>조사·어미를 뗀</b> 한국어 단어만 넣습니다 (다음 장)','꼬리표(문서 제목·소제목)에 있는 단어는 <b>더 중요하게</b> 쳐서, 제목이 맞는 글이 위로 옵니다'],
+ notes:'조각 하나가 저장소의 한 줄입니다. 원문, 숫자 묶음, 검색용 단어, 출처, 볼 수 있는 그룹을 함께 둡니다. 문서 정보와 조각은 따로 저장하고, 문서 하나에 조각이 여러 개 붙습니다.',
+ diagram:{nodes:[
+   {id:'db',x:40,y:120,w:230,h:260,title:'저장소',sub:'PostgreSQL\n한 곳에 보관',color:'violet',shape:'db',t:0},
+   {id:'row',x:330,y:40,w:700,h:420,kind:'rows',title:'조각 한 줄에 들어가는 것',lw:170,lh:66,fs:20,color:'violet',strong:true,t:.6,rows:[
+     ['원문','장애가 나면 담당자가 30분 안에 응답한다. …'],
+     ['숫자 묶음','[0.02, -0.11, 0.08, …]',1],
+     ['검색 단어','장애 · 담당자 · 응답 · 에스컬레이션 …'],
+     ['출처','MES 구축 제안 · 링크 · 9월 12일 수정'],
+     ['볼 수 있는 사람','PM 그룹 · 운영 그룹']]},
+   {id:'u1',x:1090,y:99,w:250,h:52,title:'AI 가 읽을 글',fs:18,color:'neutral',t:1.4},
+   {id:'u2',x:1090,y:165,w:250,h:52,title:'뜻으로 찾을 때',fs:18,color:'blue',tone:true,t:1.6},
+   {id:'u3',x:1090,y:231,w:250,h:52,title:'단어로 찾을 때',fs:18,color:'blue',tone:true,t:1.8},
+   {id:'u4',x:1090,y:297,w:250,h:52,title:'답변에 출처 표시',fs:18,color:'green',tone:true,t:2.0},
+   {id:'u5',x:1090,y:363,w:250,h:52,title:'권한 없으면 안 보임',fs:18,color:'rose',tone:true,t:2.2},
+   {id:'t1',x:200,y:530,w:420,h:150,title:'문서 정보',sub:'페이지 · 첨부파일 1건마다\n제목 · 링크 · 수정일 · 권한',color:'neutral',t:2.8},
+   {id:'t2',x:760,y:530,w:420,h:150,title:'조각',sub:'문서 하나에 여러 개\n(앞 장에서 나눈 조각)',color:'violet',tone:true,t:3.2},
+ ],edges:[
+   {from:'db',to:'row',fromSide:'r',toSide:'l',toPos:.4,t:.4,color:'violet'},
+   {from:'t1',to:'t2',t:3.0,color:'violet',label:'1 : 여러 개'},
+ ],notes:[
+   {x:1090,y:80,fs:16,text:'어디에 쓰나',t:1.2},
+   {x:690,y:510,fs:16,anchor:'middle',text:'실제로는 두 표로 나눠 저장합니다',t:2.6},
+ ]}},
+
+/* 5 저장소에 더한 도구 */
+{num:'05',crumb:'저장소에 더한 도구',title:'저장소에 더한 도구',tech:'PostgreSQL 확장',
+ lead:'기본 PostgreSQL 에 세 가지를 더해 "뜻으로 찾기"와 "한국어 단어 찾기"를 가능하게 했습니다',
+ easy:'PostgreSQL 은 원래 <b>영어 단어 검색</b>만 잘합니다. 여기에 <b>뜻으로 찾는 기능</b>과 <b>한국어 분석기</b>를 더해, 검색 서버를 따로 두지 않고 한 곳에서 해결했습니다.',
+ ko:['한국어 분석기는 저장소를 만들 때 <b>직접 빌드해서</b> 넣었습니다','사전에 단어를 추가하면 <b>단어 색인만 다시 계산</b>하면 됩니다. 숫자 묶음은 그대로입니다'],
+ notes:'pgvector 는 숫자 묶음을 저장하고 가까운 것을 빠르게 찾는 확장입니다. 형태소 분석기는 한국어 문장을 단어와 조사로 나눠 줍니다. 그래도 모르는 외래어는 잘게 쪼개지기 때문에 IT 용어 사전을 직접 만들었습니다. 아래 줄은 같은 문장이 도구를 하나씩 더할 때마다 어떻게 저장되는지 보여 줍니다.',
+ diagram:{nodes:[
+   {id:'pv',x:40,y:40,w:420,h:320,kind:'text',title:'① pgvector',tfs:20,fs:17,lh:30,color:'violet',t:0,lines:[
+     '숫자 묶음을 저장하고','가까운 것을 찾아 주는 확장','','[[좋아진 점]]','· 뜻으로 찾기가 가능해짐','· 조각이 많아도 빠름 (전용 색인)','· 별도 벡터 DB 없이 한 곳에서']},
+   {id:'mc',x:480,y:40,w:420,h:320,kind:'text',title:'② 한국어 형태소 분석기',tfs:20,fs:17,lh:30,color:'blue',t:.5,lines:[
+     'mecab-ko + textsearch_ko','문장을 단어와 조사·어미로 나눔','','[[좋아진 점]]','· 말끝이 달라도 같은 단어로 찾음','· "에게", "한다" 같은 말은 무시','· 한국어 키워드 검색이 제대로 동작']},
+   {id:'dic',x:920,y:40,w:420,h:320,kind:'text',title:'③ IT 용어 사전',tfs:20,fs:17,lh:30,color:'amber',t:1.0,lines:[
+     '분석기가 모르는 외래어를','직접 등록 (70여 개)','','[[좋아진 점]]','· 에스컬레이션 · 쿠버네티스 등을','   한 단어로 인식','· 새 용어는 사전에 추가만 하면 됨']},
+   {id:'ex',x:40,y:400,w:1300,h:300,kind:'chips',title:'같은 문장 "에스컬레이션한다" 가 저장되는 모습',lw:240,lh:70,color:'neutral',t:1.8,rows:[
+     ['기본 PostgreSQL',['!에스컬레이션한다','→','>한 덩어리라 "에스컬레이션" 으로는 못 찾음']],
+     ['+ 형태소 분석기',['!에스','!컬','!레이','!션','~한다','→','>모르는 외래어는 잘게 쪼개짐']],
+     ['+ IT 용어 사전',['*에스컬레이션','~한다','→','>"에스컬레이션" 으로 정확히 찾힘']]]},
+ ]}},
+
+/* 6 찾기 */
+{num:'06',crumb:'찾기',title:'찾기',tech:'리트리벌',
+ lead:'두 가지 방법으로 찾아서 합칩니다. 한쪽이 놓친 글을 다른 쪽이 잡아 줍니다',
+ easy:'<b>뜻으로 찾기</b>는 표현이 달라도 찾아내고, <b>단어로 찾기</b>는 제품명·코드처럼 정확한 말을 잘 찾습니다. 둘 다에 나온 글이 맨 위로 갑니다.',
+ ko:['질문에서 "한테", "해?" 를 떼고 <b>핵심 단어만</b> 검색합니다','모든 단어가 맞는 글이 없으면 <b>일부만 맞아도</b> 찾도록 다시 검색합니다'],
+ notes:'왼쪽은 앞 장에서 본 숫자 지도로 가까운 글을 찾는 방법, 오른쪽은 단어가 들어 있는 글을 찾는 방법입니다.',
+ diagram:{nodes:[
+   {id:'q',x:390,y:30,w:600,h:96,title:'질문',sub:`"${Q}"`,color:'amber',tone:true,t:0},
+   {id:'a',x:40,y:190,w:600,h:300,kind:'text',title:'A. 뜻으로 찾기',fs:20,lh:40,color:'blue',t:.7,lines:[
+     '질문과 가까운 위치의 글을 찾음','','1. 장애 대응 절차','2. 서버 전환(페일오버) 절차','3. 서비스 약속(SLA) 정의']},
+   {id:'b',x:740,y:190,w:600,h:300,kind:'text',title:'B. 단어로 찾기',fs:20,lh:40,color:'blue',t:1.1,lines:[
+     '핵심 단어: [[장애]] · [[누구]] · [[에스컬레이션]]','','1. 9월 운영 회의록 — 연락망','2. 장애 대응 절차']},
+   {id:'m',x:340,y:550,w:700,h:150,kind:'text',title:'합치기 — 둘 다에 나온 글이 위로',fs:20,lh:36,color:'green',strong:true,t:2.0,lines:[
+     '1. 장애 대응 절차   {{← A · B 둘 다}}','2. 서버 전환 절차   3. 9월 운영 회의록   …  [[후보 50개]]']},
+ ],edges:[
+   {from:'q',to:'a',fromSide:'b',fromPos:.25,toSide:'t',toPos:.5,t:.5},
+   {from:'q',to:'b',fromSide:'b',fromPos:.75,toSide:'t',toPos:.5,t:.9},
+   {from:'a',to:'m',fromSide:'b',fromPos:.5,toSide:'t',toPos:.2,t:1.7,color:'green'},
+   {from:'b',to:'m',fromSide:'b',fromPos:.3,toSide:'t',toPos:.85,t:1.8,color:'green'},
+ ]}},
+
+/* 7 다시 고르기 */
+{num:'07',crumb:'다시 고르기',title:'다시 고르기',tech:'리랭킹',
+ lead:'찾기는 넓게, 고르기는 꼼꼼하게. 질문과 글을 나란히 읽고 점수를 매깁니다',
+ easy:'서류 심사 뒤의 <b>면접</b>과 같습니다. 면접은 시간이 걸리니 서류를 통과한 50개만 꼼꼼히 보고, <b>상위 5개</b>만 AI 에게 넘깁니다.',
+ ko:['재채점 모델도 <b>한국어를 잘 읽는 모델</b>입니다','"에스컬레이션해?" 와 "에스컬레이션한다" 처럼 <b>말끝이 달라도</b> 같은 뜻으로 봅니다'],
+ notes:'찾기 단계는 빠르지만 대충 고릅니다. 재채점 모델은 질문과 글을 함께 읽어서 진짜 답이 들어 있는지 0에서 1 사이 점수를 줍니다. 가장 높은 점수도 낮으면, AI 를 부르지 않고 못 찾았다고 답합니다.',
+ diagram:{groups:[
+   {id:'g',x:20,y:500,w:1340,h:210,label:'관련 없는 질문이면?',color:'rose',t:3.4},
+ ],nodes:[
+   {id:'c',x:40,y:40,w:380,h:420,kind:'text',title:'후보 50개 (찾기 결과)',fs:19,lh:42,color:'blue',t:0,lines:[
+     '1. 장애 대응 절차','2. 서버 전환 절차','3. 9월 운영 회의록','4. 서비스 약속 정의','5. 서버 점검 일정','…','50. 휴가 신청 방법']},
+   {id:'judge',x:500,y:170,w:320,h:170,title:'재채점 모델',sub:'질문과 글을 함께 읽고\n0 ~ 1 점 매기기',color:'rose',strong:true,t:.8},
+   {id:'r',x:900,y:40,w:440,h:420,kind:'bars',title:'점수 순으로 다시 줄 세우기',lw:180,lh:66,color:'green',t:1.6,items:[
+     ['장애 대응 절차',.91,'green'],['9월 운영 회의록',.84,'green','3위 → 2위'],['서버 전환 절차',.37,'neutral'],['서비스 약속 정의',.24,'neutral'],['서버 점검 일정',.18,'neutral']]},
+   {id:'n1',x:60,y:575,w:300,h:110,title:'"서울 날씨 어때?"',fs:22,color:'amber',tone:true,t:3.7},
+   {id:'n2',x:480,y:575,w:340,h:110,title:'최고 점수 0.04',sub:'기준(0.3)보다 낮음',fs:22,color:'neutral',t:4.1},
+   {id:'n3',x:940,y:575,w:390,h:110,title:'"관련 문서를 못 찾았습니다"',sub:'AI 가 지어내지 않게 여기서 멈춤',fs:21,color:'rose',tone:true,t:4.5},
+ ],edges:[
+   {from:'c',to:'judge',fromSide:'r',toSide:'l',t:.6,color:'rose'},
+   {from:'judge',to:'r',fromSide:'r',toSide:'l',t:1.3,color:'green'},
+   {from:'n1',to:'n2',t:3.9,color:'rose'},{from:'n2',to:'n3',t:4.3,color:'rose'},
+ ],notes:[
+   {x:1120,y:488,anchor:'middle',fs:17,color:'green',text:'상위 5개만 AI 에게 전달',t:2.8},
+ ]}},
+
+/* 8 답하기 */
+{num:'08',crumb:'답하기',title:'답하기',tech:'답변 생성',
+ lead:'고른 글만 AI 에게 건네며 "이 글에 있는 내용으로만 답해" 라고 시킵니다',
+ easy:'<b>오픈북 시험</b>과 같습니다. 펼쳐 준 페이지에 없는 건 "모른다" 고 답하게 하고, 문장마다 <b>어느 문서에서 왔는지</b> 번호를 붙입니다.',
+ ko:['AI 에게 주는 약속도 <b>한국어로</b> 작성했습니다','"그건", "거기서" 같은 말은 <b>앞 대화 내용으로 바꿔서</b> 다시 찾습니다'],
+ notes:'고른 조각을 문서별로 묶고, 약속 4가지와 함께 AI 에게 보냅니다. 답변의 [1], [2] 를 누르면 원문 Confluence 페이지로 갑니다. 이어서 질문하면 앞 대화를 보고 질문을 완성한 뒤 다시 찾습니다.',
+ diagram:{nodes:[
+   {id:'docs',x:40,y:40,w:400,h:360,kind:'text',title:'고른 글 5개를 문서별로 묶기',fs:18,lh:32,color:'violet',t:0,lines:[
+     '[[[1] MES 구축 제안]]','   · 장애 대응 절차','   · 서버 전환 절차','[[[2] 9월 운영 회의록]]','   · 에스컬레이션 연락망','[[[3] 서비스 약속 정의서]]','   · 서비스 약속 정의','[[[4] 서버 점검 일정표]]','   · 서버 점검 일정']},
+   {id:'rule',x:500,y:40,w:400,h:360,kind:'text',title:'AI 에게 주는 약속',fs:19,lh:44,color:'neutral',t:.6,lines:[
+     '1. 이 글에 있는 내용으로만','2. 없으면 "확인되지 않습니다"','3. 문장마다 출처 번호 [1] [2]','4. 문서끼리 다르면 최신 것 우선']},
+   {id:'ai',x:960,y:120,w:380,h:180,title:'AI',sub:'글 + 약속 + 질문을 받아\n답변을 한 글자씩 보여 줌',color:'blue',strong:true,t:1.2},
+   {id:'ans',x:500,y:440,w:840,h:150,kind:'text',title:'답변',fs:20,lh:38,color:'green',tone:true,t:2.0,lines:[
+     '1차 담당자가 30분 안에 응답하지 않으면 [[운영 PM 에게 에스컬레이션]]합니다 {{[1]}}.','운영 PM 연락처는 9월 운영 회의록의 연락망을 따릅니다 {{[2]}}.']},
+   {id:'src',x:500,y:615,w:840,h:80,kind:'text',fs:18,color:'neutral',t:2.6,lines:['{{[1]}} MES 구축 제안 · 9월 12일 수정      {{[2]}} 9월 운영 회의록      ← 누르면 원문으로']},
+   {id:'fu',x:40,y:440,w:400,h:255,kind:'text',title:'이어서 물으면?',fs:19,lh:38,color:'amber',tone:true,t:3.2,lines:[
+     '"[[그건]] 누가 승인해?"','     ↓  앞 대화를 보고 바꿔서','"[[장애 에스컬레이션은]]','  누가 승인해?" 로 다시 찾기']},
+ ],edges:[
+   {from:'docs',to:'rule',t:.4,label:'함께'},
+   {from:'rule',to:'ai',fromSide:'r',toSide:'l',t:1.0},
+   {from:'ai',to:'ans',fromSide:'b',toSide:'t',toPos:.82,t:1.7,color:'green'},
+ ]}},
+
+/* 9 주제별로 묶기 */
+{num:'09',crumb:'주제별로 묶기',title:'주제별로 묶기',tech:'클러스터링',
+ lead:'검색 말고도 "뜻 지도"를 활용합니다. 어떤 주제의 문서가 얼마나 있는지 한눈에 봅니다',
+ easy:'사서가 책을 <b>주제별 서가</b>로 정리하는 것과 같습니다. 사람이 분류표를 만들지 않아도 <b>비슷한 문서끼리 알아서 모이고</b>, 이름까지 붙습니다.',
+ ko:['특징 단어는 형태소 분석 결과에서 뽑아서 <b>"장애가", "장애를"</b> 이 한 단어로 세어집니다','묶음 제목은 AI 가 <b>한국어 명사구</b>로 짓습니다'],
+ notes:'분석 탭에서 볼 수 있는 기능입니다. 문서마다 지도에 점을 찍고, 가까운 점끼리 묶습니다. 몇 묶음으로 나눌지는 가장 깔끔하게 나뉘는 개수를 자동으로 고르고, 직접 정할 수도 있습니다. 묶음마다 특징 단어를 뽑고 AI 가 짧은 제목을 붙입니다.',
+ diagram:{nodes:[
+   {id:'map',x:40,y:40,w:560,h:420,kind:'panel',title:'문서 지도 (문서 1개 = 점 1개)',color:'neutral',t:0},
+   {id:'s1',x:650,y:40,w:300,h:125,title:'① 문서마다 위치 찍기',fs:21,sub:'꼬리표는 빼고\n내용만으로',color:'amber',t:.6},
+   {id:'s2',x:650,y:185,w:300,h:125,title:'② 가까운 것끼리 묶기',fs:21,sub:'몇 묶음으로 할지는\n가장 깔끔한 개수로 자동',color:'blue',t:2.2},
+   {id:'s3',x:650,y:330,w:300,h:130,title:'③ 묶음에 이름 붙이기',fs:21,sub:'특징 단어를 뽑고\nAI 가 짧은 제목을 지음',color:'violet',t:3.8},
+   {id:'k1',x:1000,y:40,w:340,h:135,kind:'text',title:'장애 대응 · 운영 (12건)',fs:17,lh:30,color:'blue',tone:true,t:4.6,lines:['특징: [[장애]] · [[에스컬레이션]] · [[복구]]','예: 9월 운영 회의록']},
+   {id:'k2',x:1000,y:182,w:340,h:135,kind:'text',title:'클라우드 인프라 (9건)',fs:17,lh:30,color:'green',tone:true,t:4.9,lines:['특징: [[쿠버네티스]] · [[로드밸런서]]','예: 클러스터 설계서']},
+   {id:'k3',x:1000,y:324,w:340,h:135,kind:'text',title:'MES 제안 · 견적 (7건)',fs:17,lh:30,color:'violet',tone:true,t:5.2,lines:['특징: [[견적]] · [[공정]] · [[설비]]','예: 스마트팩토리 MES 구축 제안']},
+   {id:'why',x:40,y:510,w:560,h:190,kind:'text',title:'왜 꼬리표를 빼나요?',fs:18,lh:34,color:'amber',tone:true,t:6.0,lines:['[PROJ > 제안서 > …] 꼬리표를 넣으면','같은 프로젝트끼리만 뭉칩니다.','내용만 보면 [[주제]]별로 묶입니다.']},
+   {id:'rel',x:650,y:510,w:690,h:190,kind:'text',title:'덤: 비슷한 문서 추천',fs:18,lh:34,color:'green',tone:true,t:6.4,lines:['「스마트팩토리 MES 구축 제안」 을 열면','→ [[MES 견적서]] · [[공장 설비 목록]] · [[MES 운영 회의록]]','같은 지도에서 가장 가까운 문서 5개를 보여 줍니다']},
+ ],edges:[
+   {from:'s1',to:'s2',t:2.0},{from:'s2',to:'s3',t:3.6,color:'violet'},
+   {from:'s3',to:'k1',fromSide:'r',toSide:'l',via:[[975,395],[975,107]],t:4.4,color:'violet',noPacket:true},
+   {from:'s3',to:'k2',fromSide:'r',toSide:'l',via:[[975,395],[975,249]],t:4.4,color:'violet',noPacket:true},
+   {from:'s3',to:'k3',fromSide:'r',toSide:'l',toPos:.55,t:4.4,color:'violet'},
+ ],extras:CLUSTER_EXTRAS}},
+];
+
+/* ───────── 렌더 ───────── */
+const deck=document.getElementById('deck');
+let cur=0;
+const bar=(crumb,right)=>`<div class="bar"><div class="mark">K</div><span class="name">Confluence <span style="color:var(--primary)">KB</span></span><span class="crumb">› ${esc(crumb)}</span><div class="right">${right||''}</div></div>`;
+
+function rTitle(){
+  return `<div class="slide">${bar('소개','')}
+    <div class="hero"><div class="over">부서 공유 · Confluence 지식 검색</div>
+      <h1>사내 문서 AI 검색,<br><span>이렇게 동작합니다</span></h1>
+      <div class="lead">Confluence 문서를 찾아 읽고, 출처를 달아 답해 주는 과정을 차례로 살펴봅니다</div>
+    </div>
+    <div class="agenda">${AGENDA.map((a,i)=>`<div class="it" style="animation-delay:${.7+i*.1}s"><div class="n">${a[0]}</div><div class="t">${esc(a[1])}</div><div class="a">${esc(a[2])}</div></div>`).join('')}</div>
+    <div class="example">질문 하나로 끝까지 따라갑니다 — <b>"${esc(Q)}"</b></div>
+  </div>`;
+}
+function rFlow(s,i){
+  return `<div class="slide">${bar(s.crumb,`<span class="pill">${esc(s.num)}</span>`)}
+    <div class="head"><h1>${esc(s.title)}${s.tech?`<small>${esc(s.tech)}</small>`:''}</h1><div class="lead">${esc(s.lead)}</div></div>
+    <div class="body">
+      <div class="diagram"><div class="svgwrap"></div></div>
+      <div class="side">
+        <div class="card easy" style="animation-delay:.2s"><h4>쉽게 말하면</h4><p>${s.easy}</p></div>
+        <div class="card ko" style="animation-delay:.4s"><h4>한글은 이렇게</h4><ul>${s.ko.map(p=>`<li>${p}</li>`).join('')}</ul></div>
+      </div>
+    </div></div>`;
+}
+function build(){
+  deck.innerHTML=SLIDES.map((s,i)=>s.kind==='title'?rTitle():rFlow(s,i)).join('')+
+  `<div id="notes"><small>발표자 노트 · N 키로 숨김</small><span id="nb"></span></div>
+   <div class="foot"><button class="btn" id="prev">◀ 이전</button>
+   <div class="dots" id="dots">${SLIDES.map(()=>'<i></i>').join('')}</div><span id="pos"></span><button class="btn primary" id="next">다음 ▶</button></div>`;
+  document.getElementById('prev').onclick=()=>go(cur-1);
+  document.getElementById('next').onclick=()=>go(cur+1);
+}
+function openModal(i){
+  const modal=document.getElementById('modal');
+  modal.querySelector('.svgwrap').innerHTML=diagram(SLIDES[i].diagram);
+  modal.querySelector('.modal-title').textContent=SLIDES[i].title||'';
+  modal.classList.add('on');
+}
+function show(i){
+  const slides=[...deck.querySelectorAll('.slide')];
+  slides.forEach((el,k)=>el.classList.toggle('active',k===i));
+  const el=slides[i]; el.outerHTML=el.outerHTML;
+  const fresh=[...deck.querySelectorAll('.slide')][i], d=fresh.querySelector('.diagram');
+  if(d){ d.querySelector('.svgwrap').innerHTML=diagram(SLIDES[i].diagram); d.onclick=()=>openModal(i); }
+  [...document.getElementById('dots').children].forEach((x,k)=>x.classList.toggle('on',k===i));
+  document.getElementById('pos').textContent=`${i+1} / ${SLIDES.length}`;
+  document.getElementById('nb').textContent=SLIDES[i].notes||'';
+  document.getElementById('next').style.visibility=i===SLIDES.length-1?'hidden':'visible';
+  document.getElementById('prev').style.visibility=i===0?'hidden':'visible';
+  location.hash='#'+(i+1);
+}
+function go(i){ if(i<0||i>=SLIDES.length) return; cur=i; show(cur); }
+function fit(){ const s=Math.min(innerWidth/2000,innerHeight/1080); deck.style.transform=`scale(${s})`; deck.style.left=((innerWidth-2000*s)/2)+'px'; deck.style.top=((innerHeight-1080*s)/2)+'px'; }
+addEventListener('resize',fit);
+addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();go(cur+1)}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();go(cur-1)}
+  else if(e.key==='r'||e.key==='R') show(cur);
+  else if(e.key==='n'||e.key==='N') document.getElementById('notes').classList.toggle('on');
+  else if(e.key==='f'||e.key==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}
+  else if(e.key==='Home') go(0); else if(e.key==='End') go(SLIDES.length-1);
+  else if(e.key==='Escape') document.getElementById('modal').classList.remove('on');
+});
+document.getElementById('modal').onclick=e=>{if(e.target.id==='modal')e.target.classList.remove('on')};
+if(location.search.includes('static')){const st=document.createElement('style');st.textContent='*{animation-duration:0s!important;animation-delay:0s!important}.pk{display:none}';document.head.appendChild(st);}
+build(); fit();
+const h0=parseInt((location.hash||'#1').slice(1),10); go(isNaN(h0)?0:Math.min(Math.max(h0-1,0),SLIDES.length-1));
+</script>
+</body>
+</html>
