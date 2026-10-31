@@ -37,6 +37,19 @@ const light = {
     hover: '0 4px 12px rgba(0,0,0,0.08)',
     popover: '0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)',
   },
+  kind: {
+    page: { main: '#0891b2', contrastText: '#ffffff' },
+    attachment: { main: '#7c3aed', contrastText: '#ffffff' },
+  },
+  rank: {
+    both: { main: '#16a34a', contrastText: '#ffffff' },
+    single: { main: '#71717a', contrastText: '#ffffff' },
+  },
+  gauge: {
+    high: '#16a34a',
+    mid: '#d97706',
+    low: '#a1a1aa',
+  },
 };
 
 export const theme = createTheme({
