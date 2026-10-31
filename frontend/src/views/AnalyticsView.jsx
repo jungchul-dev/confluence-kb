@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tooltip, IconButton } from '@mui/material'
+import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tooltip, IconButton, CircularProgress } from '@mui/material'
 import { HelpOutlined as HelpIcon, Close as CloseIcon } from '@mui/icons-material'
 import FloatingBubbles from '../components/FloatingBubbles'
 import FloatingDots from '../components/FloatingDots'
@@ -74,8 +74,9 @@ export default function AnalyticsView({ space }) {
   const selectedColor = selected ? CLUSTER_COLORS[clusters.findIndex(c => c.cluster_id === selected.cluster_id) % CLUSTER_COLORS.length] : undefined
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <Card variant="outlined" sx={{ p: 2, flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
         <Typography color="text.secondary">클러스터 수</Typography>
         <TextField type="number" size="small" sx={{ width: 70 }} slotProps={{ htmlInput: { min: 0, max: 50 } }} value={k} onChange={(e) => setK(Math.max(0, Math.min(50, Number(e.target.value))))} />
         <Tooltip arrow title="0 이면 2~20 범위에서 실루엣 점수가 가장 높은 개수를 자동으로 고릅니다. 숫자를 넣으면 그 개수로 나눕니다.">
@@ -84,11 +85,13 @@ export default function AnalyticsView({ space }) {
             <HelpIcon sx={{ fontSize: 15 }} />
           </Typography>
         </Tooltip>
-        <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={load} disabled={loading}>{loading ? '분석 중…' : '분석'}</Button>
-      </Box>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        <Button variant="contained" size="small" sx={{ flexShrink: 0, whiteSpace: 'nowrap', minWidth: 56, ml: 'auto' }} onClick={load} disabled={loading}>{loading ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><CircularProgress size={14} color="inherit" />분석 중</Box> : '분석'}</Button>
+        </Box>
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+      </Card>
 
-      <Typography color="text.secondary" sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+      <Card variant="outlined" sx={{ p: 2, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', mt: 2, minHeight: 0 }}>
+        <Typography color="text.secondary" sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
         <span>전체 문서 {totalDocs}개 · 클러스터 {clusters.length}개</span>
         {info?.silhouette != null && (
           <Tooltip
@@ -118,7 +121,7 @@ export default function AnalyticsView({ space }) {
       </Typography>
 
       {loading && (
-        <Box sx={{ height: PANEL_HEIGHT, minHeight: PANEL_MIN_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <FloatingDots />
           </Box>
@@ -126,9 +129,9 @@ export default function AnalyticsView({ space }) {
       )}
 
       {clusters.length > 0 && (
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 2 }}>
           {/* 버블 차트 */}
-          <Box sx={{ height: PANEL_HEIGHT, minHeight: PANEL_MIN_HEIGHT, flex: 1, minWidth: 0 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             <FloatingBubbles
               items={items}
               selectedId={selected ? `cluster-${selected.cluster_id}` : null}
@@ -138,7 +141,7 @@ export default function AnalyticsView({ space }) {
 
           {/* 선택된 클러스터 상세 */}
           {selected && (
-            <Card variant="outlined" sx={{ p: 2, width: '48%', minWidth: 560, maxWidth: 900, flexShrink: 0, height: PANEL_HEIGHT, minHeight: PANEL_MIN_HEIGHT, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+            <Card variant="outlined" sx={{ p: 2, width: '48%', minWidth: 560, maxWidth: 900, flexShrink: 0, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
                 <Chip size="small" label={selected.label || `클러스터 ${selected.cluster_id}`} sx={{ backgroundColor: selectedColor, color: '#fff', fontWeight: 600, maxWidth: '100%' }} />
                 <Typography color="text.secondary">{selected.doc_count}개 문서</Typography>
@@ -189,8 +192,11 @@ export default function AnalyticsView({ space }) {
       )}
 
       {!loading && clusters.length === 0 && !error && (
-        <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>문서가 2개 이상일 때 클러스터링 결과가 표시됩니다.</Box>
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Typography color="text.secondary">문서가 2개 이상일 때 클러스터링 결과가 표시됩니다.</Typography>
+        </Box>
       )}
+      </Card>
     </Box>
   )
 }
