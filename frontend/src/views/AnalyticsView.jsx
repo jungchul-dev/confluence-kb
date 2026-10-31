@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Box, Typography, TextField, Button, Card, Alert, Chip, Pagination, Tooltip, IconButton } from '@mui/material'
 import { HelpOutlined as HelpIcon, Close as CloseIcon } from '@mui/icons-material'
 import FloatingBubbles from '../components/FloatingBubbles'
+import FloatingDots from '../components/FloatingDots'
 import * as api from '../api'
 import { FONT_SIZES } from '../theme'
 
@@ -114,6 +115,15 @@ export default function AnalyticsView({ space }) {
         )}
         {info?.docs_without_embedding > 0 && <span> · 문서 임베딩 없음 {info.docs_without_embedding}개 (청크 평균으로 대체)</span>}
       </Typography>
+
+      {loading && (
+        <Box sx={{ height: PANEL_HEIGHT, minHeight: PANEL_MIN_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <FloatingDots />
+          </Box>
+          <Typography color="text.secondary" sx={{ textAlign: 'center', pb: 1 }}>분석 중…</Typography>
+        </Box>
+      )}
 
       {clusters.length > 0 && (
         <Box sx={{ display: 'flex', gap: 2 }}>
