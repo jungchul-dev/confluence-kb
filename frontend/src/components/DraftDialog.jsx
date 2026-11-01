@@ -262,7 +262,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
             <TextField size="small" fullWidth label="작성 지침" value={form.guide} onChange={(e) => setForm({ ...form, guide: e.target.value })} onBlur={() => saveSection().catch((e) => setError(e.message))} multiline maxRows={3} />
           </Box>
         )}
-        <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 1 }}>찾는 공간: <b>{space.length ? space.join(', ') : '전체 공간'}</b> (위쪽 공간 선택). 체크한 자료만 본문 작성에 씁니다. 다시 모으면 체크하지 않은 자동 후보만 바뀌고, 체크했거나 직접 넣은 자료는 남습니다. 📌 는 문서 통째로 고정입니다.</Typography>
+        <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 1 }}>체크한 자료만 본문 작성에 사용합니다. 다시 모으면 체크하지 않은 자동 후보만 바뀌고, 체크했거나 직접 넣은 자료는 남습니다. 📌 는 문서 통째로 고정입니다.</Typography>
         <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           {collectingHere ? <Working>이 목차의 자료를 모으는 중입니다…</Working>
             : loading ? <Empty><CircularProgress size={18} /></Empty>
