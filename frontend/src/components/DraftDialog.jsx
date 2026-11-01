@@ -158,7 +158,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
   }
   const saveAll = async () => { for (const sid of Object.keys(edits)) await saveOne(sid) }
   // 단계 이동 · 닫기 때 다이얼로그가 부른다
-  if (flushRef) flushRef.current = saveAll
+  if (flushRef) flushRef.current = { save: saveAll, dirty: Object.keys(edits).length > 0 }
   const collect = async (one) => {
     setBusy(one ? '이 목차의 자료를 다시 모으는 중…' : '모든 목차의 자료를 모으는 중…'); setPending({ kind: 'collect', sectionId: one ? sectionId : null })
     try {
@@ -203,7 +203,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
   return (
     <Box sx={{ display: 'flex', gap: 1.5, flex: 1, minHeight: 0 }}>
       {/* 목차 목록 */}
-      <Card variant="outlined" sx={{ width: 260, flexShrink: 0, p: 1, display: 'flex', flexDirection: 'column' }}>
+      <Card variant="outlined" sx={{ width: 260, flexShrink: 0, p: 2, display: 'flex', flexDirection: 'column' }}>
         <Button size="small" variant="contained" onClick={() => collect(false)} disabled={!!busy} sx={{ mb: 1 }}>모든 목차 자료 모으기</Button>
         <Box component="form" onSubmit={addSection} sx={{ display: 'flex', gap: 0.5, pb: 1, mb: 1, borderBottom: 1, borderColor: 'divider' }}>
           <TextField size="small" fullWidth value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="목차 추가" disabled={!!busy} />
@@ -242,7 +242,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
         {section && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1, mb: 2, flexShrink: 0 }}>
             <TextField size="small" fullWidth label="목차 제목" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            <TextField size="small" fullWidth label="작성 지침" value={form.guide} onChange={(e) => setForm({ ...form, guide: e.target.value })} multiline rows={4} />
+            <TextField size="small" fullWidth label="작성 지침" value={form.guide} onChange={(e) => setForm({ ...form, guide: e.target.value })} multiline rows={3} />
           </Box>
         )}
         {/* 자료 모으기에 영향을 주는 것(찾을 내용 · 요구사항)과 그 결과(모은 자료)를 한 카드로 묶는다 */}
@@ -257,7 +257,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
               {draft.requirements.length > 0 && (
                 <Box>
                   <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 0.75 }}>요구사항 {mine.length}건 — 앞 3건이 검색어에 들어갑니다</Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center', maxHeight: 96, overflow: 'auto' }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
                     {mine.map((r) => (
                       <Tooltip key={r.id} title={r.content}>
                         <Chip size="small" variant="outlined" onDelete={() => assign(r.id, null)}
@@ -397,6 +397,8 @@ function SectionCard({ draft, s, onGenerate, state, open, onToggle, setDraft, se
   const [editing, setEditing] = useState(false)
   const [body, setBody] = useState(s.body || '')
   const reqs = draft.requirements.filter((r) => r.section_id === s.id)
+  const missing = reqs.filter((r) => r.covered === false).length
+  const unsure = ((s.body || '').match(/\[확인 필요/g) || []).length
   useEffect(() => { if (!editing) setBody(s.body || '') }, [s.body, editing])
 
   const save = async () => {
@@ -409,7 +411,10 @@ function SectionCard({ draft, s, onGenerate, state, open, onToggle, setDraft, se
         <IconButton size="small" onClick={onToggle} sx={{ ml: -0.75, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .15s' }}><ExpandIcon /></IconButton>
         <Typography variant="h6" onClick={onToggle} sx={{ cursor: 'pointer' }}>{s.title}</Typography>
         {s.version > 0 && <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>v{s.version} · {fmtTime(s.generated_at)}</Typography>}
-        <Typography sx={{ fontSize: FONT_SIZES.xs, color: s.selected_count ? 'text.secondary' : '#b45309' }}>자료 {s.selected_count}건</Typography>
+        <Typography sx={{ fontSize: FONT_SIZES.xs, color: s.selected_count ? 'text.secondary' : '#b45309' }}>참고 자료 {s.selected_count}건</Typography>
+        {/* 접었을 때도 검토할 것이 남았는지 보이게 한다 */}
+        {!open && missing > 0 && <Chip size="small" icon={<CrossIcon />} color="error" variant="outlined" label={`요구사항 누락 ${missing}`} sx={{ height: 22, fontSize: FONT_SIZES.xs }} />}
+        {!open && unsure > 0 && <Chip size="small" icon={<WarnIcon />} color="warning" variant="outlined" label={`확인 필요 ${unsure}`} sx={{ height: 22, fontSize: FONT_SIZES.xs }} />}
         <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
           {s.body && !editing && <Button size="small" variant="outlined" onClick={() => setEditing(true)}>직접 고치기</Button>}
           {editing && <><Button size="small" variant="outlined" onClick={() => setEditing(false)}>취소</Button><Button size="small" variant="contained" onClick={save}>저장</Button></>}
@@ -422,7 +427,7 @@ function SectionCard({ draft, s, onGenerate, state, open, onToggle, setDraft, se
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
           {reqs.map((r) => (
             <Tooltip key={r.id} title={<>{r.content}{r.coverage_note && <><br /><br />{r.coverage_note}</>}</>}>
-              <Chip size="small" variant="outlined" icon={<CoverageIcon covered={r.covered} />} label={r.code || r.content.slice(0, 18) + '…'} sx={{ fontSize: FONT_SIZES.xs }} />
+              <Chip size="small" variant="outlined" icon={r.covered == null ? undefined : <CoverageIcon covered={r.covered} />} label={r.code || r.content.slice(0, 18) + '…'} sx={{ fontSize: FONT_SIZES.xs }} />
             </Tooltip>
           ))}
         </Box>
@@ -441,7 +446,7 @@ function SectionCard({ draft, s, onGenerate, state, open, onToggle, setDraft, se
       {s.citations.length > 0 && !editing && !state && (
         // 작성본에는 출처를 달지 않는다. 검토용으로 이 목차를 쓸 때 넣은 자료만 보여 준다 (내보내기에는 들어가지 않음)
         <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
-          <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', fontWeight: 600, mb: 0.25 }}>참고한 자료 (검토용 · 내보내기에는 들어가지 않음)</Typography>
+          <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', fontWeight: 600, mb: 0.25 }}>참고 자료</Typography>
           {s.citations.map((c) => (
             <Typography key={c.n} sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>
               · {c.url ? <Link href={c.url} target="_blank" rel="noreferrer">{c.title}</Link> : c.title}{c.heading ? ` · ${c.heading}` : ''}
@@ -500,19 +505,18 @@ function WriteTab({ draft, setDraft, setError, notify }) {
             {uncovered.length > 0 && <div>본문에 빠진 요구사항: {uncovered.map((r) => r.code || r.content.slice(0, 15)).join(', ')}</div>}
             {unassigned.length > 0 && <div>목차에 배정되지 않은 요구사항 {unassigned.length}건은 본문에 반영되지 않습니다.</div>}
           </>}>
-            <Chip size="small" icon={<WarnIcon />} color="warning" variant="outlined" label={`요구사항 ${uncovered.length ? `누락 ${uncovered.length}` : ''}${uncovered.length && unassigned.length ? ' · ' : ''}${unassigned.length ? `미배정 ${unassigned.length}` : ''}`} />
+            <Chip icon={<WarnIcon fontSize="small" />} color="warning" variant="outlined"
+              sx={{ height: 34, borderRadius: '6px', fontSize: '0.875rem', fontWeight: 600, '& .MuiChip-label': { px: 1.5, pl: 0.75 }, '& .MuiChip-icon': { ml: 1.25 } }} label={`요구사항 ${uncovered.length ? `누락 ${uncovered.length}` : ''}${uncovered.length && unassigned.length ? ' · ' : ''}${unassigned.length ? `미배정 ${unassigned.length}` : ''}`} />
           </Tooltip>
         )}
         <Box sx={{ flex: 1 }} />
-        <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>
-          {draft.template_form ? `템플릿(${draft.template_form})에 채워 ${draft.doc_format} 로 내보냅니다` : `새 ${draft.doc_format} 로 내보냅니다`}
-        </Typography>
+        {draft.template_form && <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>템플릿({draft.template_form})에 채워 {draft.doc_format} 로 내보냅니다</Typography>}
         <Button size="small" variant="contained" startIcon={exporting ? <CircularProgress size={14} color="inherit" /> : <DownloadIcon />} onClick={doExport} disabled={exporting || !!running}>내보내기</Button>
       </Box>
       {/* 진행 막대는 높이를 미리 잡아 두어 화면이 밀리지 않게 한다 */}
       <Box sx={{ height: 4, mb: 1 }}>{progress && <LinearProgress variant="determinate" value={(progress.done / Math.max(progress.total, 1)) * 100} />}</Box>
       <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 1 }}>
-        {progress ? `${progress.done} / ${progress.total} 목차 작성 중 · ` : ''}근거가 없는 내용은 <b>⚠ 확인 필요</b> 로 표시됩니다. 내보내기 전에 채워 넣으세요.
+        {progress ? `${progress.done} / ${progress.total} 목차 작성 중 · ` : ''}근거가 없는 내용은 <b>⚠ 확인 필요</b> 로 표시됩니다. 내보내기 전에 수정해주세요.
       </Typography>
       <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, pr: 0.5 }}>
         {draft.sections.map((s) => (
@@ -543,7 +547,7 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
   const [overview, setOverview] = useState('')
   const [docFormat, setDocFormat] = useState('docx')
   const [loading, setLoading] = useState(false)
-  const flushRef = useRef(null) // 목차 · 자료 선별 화면에서 고친 내용 저장 함수
+  const flushRef = useRef(null) // 목차 · 자료 선별 화면의 { save: 고친 내용 저장, dirty: 저장 안 된 수정이 있는지 }
 
   useEffect(() => {
     if (!open) return
@@ -583,14 +587,14 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
   const goto = async (next) => {
     try {
       if (step === 0) await saveInfo()
-      if (step === 3 && flushRef.current) await flushRef.current()
+      if (step === 3 && flushRef.current) await flushRef.current.save()
       flushRef.current = null
       setStep(next)
     } catch (e) { setError(e.message) }
   }
-  // 닫을 때도 고친 내용을 잃지 않게 저장한다
-  const close = async () => {
-    try { if (flushRef.current) await flushRef.current() } catch (e) { setError(e.message); return }
+  // 닫기는 저장하지 않는다 (저장은 단계를 옮길 때만). 저장 안 된 수정이 있으면 버릴지 묻는다
+  const close = () => {
+    if (flushRef.current?.dirty && !window.confirm('저장되지 않은 수정이 있습니다. 저장하지 않고 닫을까요?')) return
     flushRef.current = null
     onClose()
   }
@@ -617,18 +621,18 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
     <Dialog open={open} onClose={() => !busy && close()} fullWidth maxWidth={false}
       slotProps={{ paper: { sx: { width: 'min(1680px, calc(100% - 48px))', height: 'min(1000px, calc(100% - 48px))', maxHeight: 'none', m: 3 } } }}>
       {/* 머리 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 3, pt: 2, pb: 1.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 3, pt: 2, pb: 1.5, borderBottom: 1, borderColor: 'divider' }}>
         <Typography variant="h6" noWrap sx={{ flex: 1, minWidth: 0 }}>{draft?.name || '새 자료 작성'}</Typography>
         <IconButton size="small" aria-label="닫기" onClick={close} disabled={!!busy} sx={{ ml: 'auto', p: 0.5, position: 'relative', zIndex: 2 }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
-      <Box sx={{ px: 3, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Box sx={{ px: 3, pt: 2, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
         <Stepper nonLinear activeStep={step} alternativeLabel sx={{ '& .MuiStepLabel-label.MuiStepLabel-alternativeLabel': { mt: 1 } }}>
           {STEPS.map((label, i) => (
-            <Step key={label} completed={false}>
-              {/* StepButton 기본값(padding 24px + 같은 크기 음수 margin)은 클릭 영역이 위로 24px 튀어나와 닫기 버튼을 덮으므로 없앤다 */}
-              <StepButton onClick={() => goto(i)} disabled={!draft || !!busy} sx={{ m: 0, py: 0.5, px: 1 }}
+            <Step key={label} completed={false} sx={{ display: 'flex', justifyContent: 'center' }}>
+              {/* StepButton 기본값은 칸 너비 전체 + 위아래 24px 까지 눌린다. 글자 크기만큼만 눌리게 줄인다 (위로 튀어나와 닫기 버튼을 덮던 문제도 함께) */}
+              <StepButton onClick={() => goto(i)} disabled={!draft || !!busy} sx={{ m: 0, mx: 'auto', py: 0.5, px: 1.5, width: 'auto', borderRadius: 1.5 }}
                 optional={sub[i] ? <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{sub[i]}</Typography> : undefined}>
                 {label}
               </StepButton>
