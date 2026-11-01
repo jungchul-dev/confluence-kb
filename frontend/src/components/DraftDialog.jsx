@@ -71,7 +71,6 @@ function RequirementsStep({ draft, reload, setDraft, busy, setBusy, setError, no
   const fileRef = useRef(null)
   const [newReq, setNewReq] = useState('')
   const [adding, setAdding] = useState(false)
-  const sections = draft.sections
 
   const upload = async (file) => {
     if (!file) return
@@ -79,7 +78,6 @@ function RequirementsStep({ draft, reload, setDraft, busy, setBusy, setError, no
     try { const d = await api.uploadRequirementFile(draft.id, file); setDraft(d); notify(`${file.name} 에서 요구사항 ${d.extracted}건을 뽑았습니다.`) } catch (e) { setError(e.message) } finally { setBusy('') }
   }
   const act = async (fn) => { setError(''); try { const d = await fn(); if (d) setDraft(d); else await reload() } catch (e) { setError(e.message) } }
-  const showTools = draft.files.length > 0 || (sections.length > 0 && draft.requirements.length > 0)
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
@@ -94,37 +92,20 @@ function RequirementsStep({ draft, reload, setDraft, busy, setBusy, setError, no
         <input ref={fileRef} type="file" hidden accept=".pdf,.docx,.pptx,.xlsx,.md,.txt" onChange={(e) => { upload(e.target.files?.[0]); e.target.value = '' }} />
         <Button variant="contained" size="small" startIcon={<UploadIcon />} onClick={() => fileRef.current?.click()} disabled={!!busy} sx={{ flexShrink: 0, whiteSpace: 'nowrap', ml: 2 }}>요구사항 파일 올리기</Button>
       </Box>
-      {showTools && (
+      {draft.files.length > 0 && (
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1.5 }}>
           {draft.files.map((f) => (
             <Chip key={f.id} size="small" icon={<FileIcon />} label={`${f.file_name} · ${f.chars.toLocaleString()}자`} onDelete={() => window.confirm(`${f.file_name} 과 여기서 뽑은 요구사항을 지울까요?`) && act(() => api.deleteRequirementFile(draft.id, f.id))} />
           ))}
-          <Box sx={{ flex: 1 }} />
-          {sections.length > 0 && draft.requirements.length > 0 && (
-            <Tooltip title="목차를 고친 뒤 요구사항을 가장 가까운 목차에 처음부터 다시 배정합니다">
-              <Button size="small" variant="outlined" onClick={() => act(() => api.reassignRequirements(draft.id))}>목차 다시 배정</Button>
-            </Tooltip>
-          )}
         </Box>
       )}
-      <Hint>
-        요구사항 문서를 올리면 항목을 뽑습니다. 요구사항은 목차 제안과 자료 검색에 쓰이고, 본문을 만든 뒤 반영 여부를 점검합니다. 요구사항이 없으면 건너뛰어도 됩니다.
-        {sections.length === 0 && ' 목차는 다음 단계에서 정해지며, 그때 요구사항을 가장 가까운 목차에 자동 배정합니다.'}
-      </Hint>
+      <Hint>요구사항 문서를 올리면 항목을 뽑습니다. 요구사항은 목차를 만들 때 함께 참고하고, 목차마다 나눠 붙여 자료 검색과 본문 작성에 씁니다. 요구사항이 없으면 건너뛰어도 됩니다.</Hint>
       <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
         {draft.requirements.length === 0 && <Empty>아직 요구사항이 없습니다. 파일을 올리거나 위에 직접 입력하세요.</Empty>}
         {draft.requirements.map((r) => (
           <Box key={r.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
-            <CoverageIcon covered={r.covered} note={r.coverage_note} />
             <Typography sx={{ width: 90, flexShrink: 0, fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{r.code || '-'}</Typography>
             <Typography sx={{ flex: 1, fontSize: FONT_SIZES.md }}>{r.content}</Typography>
-            {sections.length > 0 && (
-              <Select size="small" value={r.section_id || ''} displayEmpty sx={{ width: 260, flexShrink: 0 }}
-                onChange={(e) => act(() => api.updateRequirement(draft.id, r.id, { section_id: e.target.value || null }))}>
-                <MenuItem value=""><em>배정 안 함</em></MenuItem>
-                {sections.map((s) => <MenuItem key={s.id} value={s.id}>{s.title}</MenuItem>)}
-              </Select>
-            )}
             <IconButton size="small" onClick={() => act(() => api.deleteRequirement(draft.id, r.id))}><DeleteIcon fontSize="small" /></IconButton>
           </Box>
         ))}
@@ -139,9 +120,6 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
   const [sources, setSources] = useState([])
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState(null)
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState(null)
-  const [searching, setSearching] = useState(false)
   const [form, setForm] = useState({ title: '', query: '', guide: '' })
   const [newTitle, setNewTitle] = useState('')
   const section = draft.sections.find((s) => s.id === sectionId)
@@ -159,7 +137,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
     try { setSources((await api.listSources(draft.id, sectionId)).sources) } catch (e) { setError(e.message) } finally { setLoading(false) }
   }, [draft.id, sectionId, setError]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setPreview(null); setResults(null) }, [sectionId])
+  useEffect(() => { setPreview(null) }, [sectionId])
   // 목차를 바꾸거나, 밖에서 후보가 바뀌었거나(전체 모으기 등), 모으기가 끝나면 다시 읽는다
   useEffect(() => { if (collectingHere) { setSources([]); setPreview(null) } else load() }, [load, section?.source_count, collectingHere])
   useEffect(() => { setForm({ title: section?.title || '', query: section?.query || '', guide: section?.guide || '' }) }, [sectionId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -170,7 +148,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
     if (Object.keys(body).length) setDraft(await api.updateDraftSection(draft.id, sectionId, body))
   }
   const collect = async (one) => {
-    setBusy(one ? '이 목차 자료를 다시 모으는 중…' : '모든 목차의 자료를 모으는 중…'); setPending({ kind: 'collect', sectionId: one ? sectionId : null })
+    setBusy(one ? '이 목차의 자료를 다시 모으는 중…' : '모든 목차의 자료를 모으는 중…'); setPending({ kind: 'collect', sectionId: one ? sectionId : null })
     try {
       if (one) await saveSection()
       setDraft(await api.collectSources(draft.id, one ? sectionId : null, space))
@@ -193,14 +171,11 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
     try { await api.updateSource(draft.id, s.id, body); reload() } catch (e) { setError(e.message); load() }
   }
   const remove = async (s) => { try { await api.deleteSource(draft.id, s.id); await load(); reload() } catch (e) { setError(e.message) } }
-  const search = async (e) => {
-    e?.preventDefault(); if (!q.trim()) return
-    setSearching(true)
-    try { setResults((await api.search(q.trim(), 10, space)).results) } catch (err) { setError(err.message) } finally { setSearching(false) }
-  }
-  const add = async (r, whole) => {
-    try { await api.addSource(draft.id, sectionId, whole ? { documentId: r.document_id } : { chunkId: r.chunk_id }); await load(); reload() } catch (e) { setError(e.message) }
-  }
+  // 이 목차에 붙은 요구사항 · 다른 곳(다른 목차 · 미배정)에 있는 요구사항
+  const mine = draft.requirements.filter((r) => r.section_id === sectionId)
+  const others = draft.requirements.filter((r) => r.section_id !== sectionId)
+  const sectionTitle = (sid) => draft.sections.find((x) => x.id === sid)?.title
+  const assign = (rid, sid) => act(() => api.updateRequirement(draft.id, rid, { section_id: sid }))
 
   if (pending?.kind === 'outline') return <Working>목차를 새로 제안받는 중입니다. 끝나면 새 목차와 자료가 여기에 보입니다.</Working>
   if (!draft.sections.length) {
@@ -250,65 +225,77 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
         </Button>
       </Card>
 
-      {/* 목차 설정 + 후보 · 선택 자료 */}
+      {/* 목차 설정 (제목 · 작성 지침) + 참고 자료 (찾을 내용 · 요구사항 → 모은 자료) */}
       <Card variant="outlined" sx={{ flex: 1, minWidth: 0, p: 1.5, display: 'flex', flexDirection: 'column' }}>
         {section && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1, mb: 1.5 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1, mb: 2, flexShrink: 0 }}>
             <TextField size="small" fullWidth label="목차 제목" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} onBlur={() => saveSection().catch((e) => setError(e.message))} />
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField size="small" fullWidth label="찾을 내용" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} onBlur={() => saveSection().catch((e) => setError(e.message))} />
-              <Button size="small" variant="outlined" onClick={() => collect(true)} disabled={!!busy} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>이 목차 다시 모으기</Button>
-            </Box>
             <TextField size="small" fullWidth label="작성 지침" value={form.guide} onChange={(e) => setForm({ ...form, guide: e.target.value })} onBlur={() => saveSection().catch((e) => setError(e.message))} multiline maxRows={3} />
           </Box>
         )}
-        <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 1 }}>체크한 자료만 본문 작성에 사용합니다. 다시 모으면 체크하지 않은 자동 후보만 바뀌고, 체크했거나 직접 넣은 자료는 남습니다. 📌 는 문서 통째로 고정입니다.</Typography>
-        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-          {collectingHere ? <Working>이 목차의 자료를 모으는 중입니다…</Working>
-            : loading ? <Empty><CircularProgress size={18} /></Empty>
-            : sources.length === 0 ? <Empty>후보가 없습니다. "이 목차 다시 모으기" 를 누르거나 아래에서 직접 찾아 넣으세요.</Empty>
-            : sources.map((s) => (
-              <Box key={s.id} onClick={() => setPreview(s)} sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start', p: 0.75, mb: 0.5, borderRadius: 1.5, border: 1, cursor: 'pointer', borderColor: preview?.id === s.id ? 'primary.main' : 'divider', backgroundColor: s.selected ? '#f8fbff' : 'transparent' }}>
-                <Checkbox size="small" checked={s.selected} onClick={(e) => e.stopPropagation()} onChange={(e) => toggle(s, { selected: e.target.checked })} sx={{ p: 0.5 }} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-                    <Typography noWrap sx={{ fontWeight: 500, fontSize: FONT_SIZES.md, minWidth: 0 }}>{s.title}</Typography>
-                    {s.origin === 'manual' && <Chip size="small" label="직접 추가" sx={{ height: 20, fontSize: FONT_SIZES.xs }} />}
-                    {s.source_state === 'changed' && <Tooltip title="고른 뒤 원문이 수정됐습니다. 다시 모으거나 원문을 확인하세요"><Chip size="small" label="원문 수정됨" sx={{ height: 20, fontSize: FONT_SIZES.xs, backgroundColor: '#fffbeb', color: '#b45309' }} /></Tooltip>}
-                    {s.source_state === 'deleted' && <Chip size="small" label="원문 삭제됨" sx={{ height: 20, fontSize: FONT_SIZES.xs, backgroundColor: '#fef2f2', color: '#dc2626' }} />}
-                    {s.score != null && <Typography sx={{ ml: 'auto', flexShrink: 0, fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{Math.round(s.score * 100)}%</Typography>}
-                  </Box>
-                  <ShortPath path={s.path} heading={s.chunk_ordinal == null ? '문서 전체' : s.heading} />
-                </Box>
-                <Tooltip title={s.pinned ? '고정 해제' : '반드시 참고 (고정)'}>
-                  <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggle(s, { pinned: !s.pinned }) }}>{s.pinned ? <PinIcon fontSize="small" color="primary" /> : <PinOutlinedIcon fontSize="small" />}</IconButton>
-                </Tooltip>
-                <IconButton size="small" onClick={(e) => { e.stopPropagation(); remove(s) }}><DeleteIcon fontSize="small" /></IconButton>
+        {/* 자료 모으기에 영향을 주는 것(찾을 내용 · 요구사항)과 그 결과(모은 자료)를 한 카드로 묶는다 */}
+        <Typography sx={{ fontWeight: 600, mb: 0.75, flexShrink: 0 }}>참고 자료</Typography>
+        <Card variant="outlined" sx={{ flex: 1, minHeight: 0, p: 1.5, display: 'flex', flexDirection: 'column', backgroundColor: 'background.default' }}>
+          {section && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.75, mb: 1.5, flexShrink: 0 }}>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <TextField size="small" fullWidth label="찾을 내용" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} onBlur={() => saveSection().catch((e) => setError(e.message))} />
+                <Button size="small" variant="outlined" onClick={() => collect(true)} disabled={!!busy} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>다시 모으기</Button>
               </Box>
-            ))}
-        </Box>
-        {/* 직접 찾아 넣기 */}
-        <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 1, mt: 1, maxHeight: '40%', display: 'flex', flexDirection: 'column' }}>
-          <Box component="form" onSubmit={search} sx={{ display: 'flex', gap: 1 }}>
-            <TextField size="small" fullWidth value={q} onChange={(e) => setQ(e.target.value)} placeholder="직접 찾아 넣기 — 사내 문서 검색" />
-            <Button type="submit" size="small" variant="outlined" disabled={searching || !q.trim()} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{searching ? '검색 중' : '검색'}</Button>
-          </Box>
-          {results && (
-            <Box sx={{ overflow: 'auto', mt: 1 }}>
-              {results.length === 0 && <Typography sx={{ fontSize: FONT_SIZES.sm, color: 'text.disabled' }}>결과가 없습니다.</Typography>}
-              {results.map((r) => (
-                <Box key={r.chunk_id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography noWrap sx={{ fontSize: FONT_SIZES.md }}>{r.title}</Typography>
-                    <ShortPath path={r.path} heading={r.heading} />
+              {draft.requirements.length > 0 && (
+                <Box>
+                  <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 0.75 }}>요구사항 {mine.length}건 — 앞 3건이 검색어에 들어갑니다</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center', maxHeight: 96, overflow: 'auto' }}>
+                    {mine.map((r) => (
+                      <Tooltip key={r.id} title={r.content}>
+                        <Chip size="small" variant="outlined" onDelete={() => assign(r.id, null)}
+                          label={<>{r.code && <Box component="span" sx={{ fontFamily: MONO_FONT, mr: 0.75, color: 'text.secondary' }}>{r.code}</Box>}{r.content}</>}
+                          sx={{ maxWidth: 360, fontSize: FONT_SIZES.xs }} />
+                      </Tooltip>
+                    ))}
+                    {others.length > 0 && (
+                      <Select size="small" value="" displayEmpty onChange={(e) => e.target.value && assign(e.target.value, sectionId)}
+                        renderValue={() => <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>+ 요구사항 붙이기</Typography>}
+                        sx={{ height: 24, '& .MuiSelect-select': { py: 0 } }} MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360, maxWidth: 560 } } } }}>
+                        {others.map((r) => (
+                          <MenuItem key={r.id} value={r.id} sx={{ display: 'block', whiteSpace: 'normal' }}>
+                            <Typography sx={{ fontSize: FONT_SIZES.sm }}>{r.code ? `${r.code} ` : ''}{r.content}</Typography>
+                            <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{r.section_id ? `지금: ${sectionTitle(r.section_id)}` : '아직 목차에 붙지 않음'}</Typography>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    )}
                   </Box>
-                  <Button size="small" variant="outlined" onClick={() => add(r, false)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>이 조각</Button>
-                  <Button size="small" variant="outlined" onClick={() => add(r, true)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>문서 전체</Button>
                 </Box>
-              ))}
+              )}
             </Box>
           )}
-        </Box>
+          <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 1, flexShrink: 0 }}>찾을 내용과 요구사항으로 사내 문서를 찾아 모은 자료입니다. 체크한 자료만 본문 작성에 사용합니다. 다시 모으면 체크하지 않은 자동 후보만 바뀌고, 체크한 자료는 남습니다. 📌 는 반드시 참고 — 자료가 많아 잘릴 때도 가장 먼저 넣습니다.</Typography>
+          <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+            {collectingHere ? <Working>이 목차의 자료를 모으는 중입니다…</Working>
+              : loading ? <Empty><CircularProgress size={18} /></Empty>
+              : sources.length === 0 ? <Empty>후보가 없습니다. [다시 모으기] 를 누르세요.</Empty>
+              : sources.map((s) => (
+                <Box key={s.id} onClick={() => setPreview(s)} sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start', p: 0.75, mb: 0.5, borderRadius: 1.5, border: 1, cursor: 'pointer', borderColor: preview?.id === s.id ? 'primary.main' : 'divider', backgroundColor: s.selected ? '#f8fbff' : 'transparent' }}>
+                  <Checkbox size="small" checked={s.selected} onClick={(e) => e.stopPropagation()} onChange={(e) => toggle(s, { selected: e.target.checked })} sx={{ p: 0.5 }} />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                      <Typography noWrap sx={{ fontWeight: 500, fontSize: FONT_SIZES.md, minWidth: 0 }}>{s.title}</Typography>
+                      {s.origin === 'manual' && <Chip size="small" label="직접 추가" sx={{ height: 20, fontSize: FONT_SIZES.xs }} />}
+                      {s.source_state === 'changed' && <Tooltip title="고른 뒤 원문이 수정됐습니다. 다시 모으거나 원문을 확인하세요"><Chip size="small" label="원문 수정됨" sx={{ height: 20, fontSize: FONT_SIZES.xs, backgroundColor: '#fffbeb', color: '#b45309' }} /></Tooltip>}
+                      {s.source_state === 'deleted' && <Chip size="small" label="원문 삭제됨" sx={{ height: 20, fontSize: FONT_SIZES.xs, backgroundColor: '#fef2f2', color: '#dc2626' }} />}
+                      {s.score != null && <Typography sx={{ ml: 'auto', flexShrink: 0, fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{Math.round(s.score * 100)}%</Typography>}
+                    </Box>
+                    <ShortPath path={s.path} heading={s.chunk_ordinal == null ? '문서 전체' : s.heading} />
+                  </Box>
+                  <Tooltip title={s.pinned ? '고정 해제' : '반드시 참고 (자료가 많아 잘릴 때도 가장 먼저 넣습니다)'}>
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggle(s, { pinned: !s.pinned }) }}>{s.pinned ? <PinIcon fontSize="small" color="primary" /> : <PinOutlinedIcon fontSize="small" />}</IconButton>
+                  </Tooltip>
+                  <IconButton size="small" onClick={(e) => { e.stopPropagation(); remove(s) }}><DeleteIcon fontSize="small" /></IconButton>
+                </Box>
+              ))}
+          </Box>
+        </Card>
       </Card>
 
       {/* 미리보기 */}
@@ -594,7 +581,7 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
 
   return (
     <Dialog open={open} onClose={() => !busy && onClose()} fullWidth maxWidth={false}
-      slotProps={{ paper: { sx: { width: 'min(1480px, calc(100% - 64px))', height: 'min(880px, calc(100% - 64px))', maxHeight: 'none', m: 4 } } }}>
+      slotProps={{ paper: { sx: { width: 'min(1680px, calc(100% - 48px))', height: 'min(880px, calc(100% - 48px))', maxHeight: 'none', m: 3 } } }}>
       {/* 머리 */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 3, pt: 2, pb: 1.5 }}>
         <Typography variant="h6" noWrap sx={{ flex: 1, minWidth: 0 }}>{draft?.name || '새 자료 작성'}</Typography>

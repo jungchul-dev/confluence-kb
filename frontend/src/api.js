@@ -105,14 +105,12 @@ export const deleteRequirementFile = (id, fileId) => request(`/drafts/${id}/file
 export const addRequirement = (id, content, sectionId) => request(`/drafts/${id}/requirements`, { method: 'POST', body: { content, section_id: sectionId || null } })
 export const updateRequirement = (id, reqId, body) => request(`/drafts/${id}/requirements/${reqId}`, { method: 'PUT', body })
 export const deleteRequirement = (id, reqId) => request(`/drafts/${id}/requirements/${reqId}`, { method: 'DELETE' })
-export const reassignRequirements = (id) => request(`/drafts/${id}/requirements/reassign`, { method: 'POST' })
 
 // spaceKeys: 위쪽에서 고른 공간 (비우면 전체)
 export const collectSources = (id, sectionId, spaceKeys = []) => request(`/drafts/${id}/collect`, { method: 'POST', body: { section_id: sectionId || null, space_keys: spaceKeys } })
 export const listSources = (id, sectionId) => request(`/drafts/${id}/sections/${sectionId}/sources`)
 export const updateSource = (id, sourceId, body) => request(`/drafts/${id}/sources/${sourceId}`, { method: 'PATCH', body })
 export const deleteSource = (id, sourceId) => request(`/drafts/${id}/sources/${sourceId}`, { method: 'DELETE' })
-export const addSource = (id, sectionId, { chunkId, documentId }) => request(`/drafts/${id}/sections/${sectionId}/sources`, { method: 'POST', body: { chunk_id: chunkId || null, document_id: documentId || null } })
 export const generateSection = (id, sectionId) => request(`/drafts/${id}/sections/${sectionId}/generate`, { method: 'POST' })
 
 // 내보내기 — 파일을 받아 바로 내려받기
