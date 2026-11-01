@@ -115,14 +115,18 @@ function RequirementsStep({ draft, reload, setDraft, busy, setBusy, setError, no
 }
 
 // ───────── 자료 선별 (목차 다듬기 포함) ─────────
-function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, proposeAndCollect, pending, setPending }) {
+function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, proposeAndCollect, pending, setPending, flushRef }) {
   const [sectionId, setSectionId] = useState(draft.sections[0]?.id)
   const [sources, setSources] = useState([])
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState(null)
-  const [form, setForm] = useState({ title: '', query: '', guide: '' })
+  // 고친 목차 제목 · 찾을 내용 · 작성 지침은 화면에만 들고 있다가 단계를 옮기거나(stepper) 닫을 때 한꺼번에 저장한다 (입력마다 서버를 부르지 않는다)
+  const [edits, setEdits] = useState({}) // { 목차 id: { title, query, guide } }
   const [newTitle, setNewTitle] = useState('')
   const section = draft.sections.find((s) => s.id === sectionId)
+  const valuesOf = (s) => edits[s.id] || { title: s.title, query: s.query, guide: s.guide }
+  const form = section ? valuesOf(section) : { title: '', query: '', guide: '' }
+  const setForm = (next) => setEdits((e) => ({ ...e, [sectionId]: next }))
   // 다시 모으는 중인 목차 (pending.sectionId 가 null 이면 전체)
   const isCollecting = (sid) => pending?.kind === 'collect' && (!pending.sectionId || pending.sectionId === sid)
   const collectingHere = isCollecting(sectionId)
@@ -140,17 +144,25 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
   useEffect(() => { setPreview(null) }, [sectionId])
   // 목차를 바꾸거나, 밖에서 후보가 바뀌었거나(전체 모으기 등), 모으기가 끝나면 다시 읽는다
   useEffect(() => { if (collectingHere) { setSources([]); setPreview(null) } else load() }, [load, section?.source_count, collectingHere])
-  useEffect(() => { setForm({ title: section?.title || '', query: section?.query || '', guide: section?.guide || '' }) }, [sectionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveSection = async () => {
-    const body = {}
-    for (const k of ['title', 'query', 'guide']) if (form[k] !== section[k] && (k !== 'title' || form.title.trim())) body[k] = form[k]
-    if (Object.keys(body).length) setDraft(await api.updateDraftSection(draft.id, sectionId, body))
+  // 목차 하나 저장 — 바뀐 칸만 보낸다. 다시 제안 · 삭제로 사라진 목차는 건너뛴다
+  const saveOne = async (sid) => {
+    const s = draft.sections.find((x) => x.id === sid)
+    const e = edits[sid]
+    if (s && e) {
+      const body = {}
+      for (const k of ['title', 'query', 'guide']) if (e[k] !== s[k] && (k !== 'title' || e.title.trim())) body[k] = e[k]
+      if (Object.keys(body).length) setDraft(await api.updateDraftSection(draft.id, sid, body))
+    }
+    setEdits((prev) => { const { [sid]: _, ...rest } = prev; return rest })
   }
+  const saveAll = async () => { for (const sid of Object.keys(edits)) await saveOne(sid) }
+  // 단계 이동 · 닫기 때 다이얼로그가 부른다
+  if (flushRef) flushRef.current = saveAll
   const collect = async (one) => {
     setBusy(one ? '이 목차의 자료를 다시 모으는 중…' : '모든 목차의 자료를 모으는 중…'); setPending({ kind: 'collect', sectionId: one ? sectionId : null })
     try {
-      if (one) await saveSection()
+      await (one ? saveOne(sectionId) : saveAll()) // 모으기 전에 고친 찾을 내용을 먼저 저장한다
       setDraft(await api.collectSources(draft.id, one ? sectionId : null, space))
     } catch (e) { setError(e.message) } finally { setBusy(''); setPending(null) }
   }
@@ -202,7 +214,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
             const active = s.id === sectionId
             return (
               <Box key={s.id} onClick={() => setSectionId(s.id)} sx={{ p: 1, mb: 0.5, borderRadius: 1.5, cursor: 'pointer', border: 1, borderColor: active ? 'primary.main' : 'transparent', backgroundColor: active ? 'action.selected' : 'transparent', '&:hover': { backgroundColor: 'action.hover' } }}>
-                <Typography noWrap sx={{ fontSize: FONT_SIZES.md, fontWeight: 500 }}>{s.title}</Typography>
+                <Typography noWrap sx={{ fontSize: FONT_SIZES.md, fontWeight: 500 }}>{valuesOf(s).title || s.title}</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   {isCollecting(s.id)
                     ? <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'primary.main', flex: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}><CircularProgress size={10} />모으는 중…</Typography>
@@ -229,8 +241,8 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
       <Card variant="outlined" sx={{ flex: 1, minWidth: 0, p: 1.5, display: 'flex', flexDirection: 'column' }}>
         {section && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1, mb: 2, flexShrink: 0 }}>
-            <TextField size="small" fullWidth label="목차 제목" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} onBlur={() => saveSection().catch((e) => setError(e.message))} />
-            <TextField size="small" fullWidth label="작성 지침" value={form.guide} onChange={(e) => setForm({ ...form, guide: e.target.value })} onBlur={() => saveSection().catch((e) => setError(e.message))} multiline maxRows={3} />
+            <TextField size="small" fullWidth label="목차 제목" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <TextField size="small" fullWidth label="작성 지침" value={form.guide} onChange={(e) => setForm({ ...form, guide: e.target.value })} multiline rows={4} />
           </Box>
         )}
         {/* 자료 모으기에 영향을 주는 것(찾을 내용 · 요구사항)과 그 결과(모은 자료)를 한 카드로 묶는다 */}
@@ -239,7 +251,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
           {section && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.75, mb: 1.5, flexShrink: 0 }}>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <TextField size="small" fullWidth label="찾을 내용" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} onBlur={() => saveSection().catch((e) => setError(e.message))} />
+                <TextField size="small" fullWidth label="찾을 내용" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} />
                 <Button size="small" variant="outlined" onClick={() => collect(true)} disabled={!!busy} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>다시 모으기</Button>
               </Box>
               {draft.requirements.length > 0 && (
@@ -519,6 +531,7 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
   const [overview, setOverview] = useState('')
   const [docFormat, setDocFormat] = useState('docx')
   const [loading, setLoading] = useState(false)
+  const flushRef = useRef(null) // 목차 · 자료 선별 화면에서 고친 내용 저장 함수
 
   useEffect(() => {
     if (!open) return
@@ -554,11 +567,20 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
       notify(`목차 ${d.sections.length}개를 제안받고 자료를 모았습니다.`)
     } catch (e) { setError(e.message) } finally { setBusy(''); setPending(null) }
   }
+  // 단계를 옮길 때 지금 화면에서 고친 내용을 저장한다
   const goto = async (next) => {
     try {
       if (step === 0) await saveInfo()
+      if (step === 3 && flushRef.current) await flushRef.current()
+      flushRef.current = null
       setStep(next)
     } catch (e) { setError(e.message) }
+  }
+  // 닫을 때도 고친 내용을 잃지 않게 저장한다
+  const close = async () => {
+    try { if (flushRef.current) await flushRef.current() } catch (e) { setError(e.message); return }
+    flushRef.current = null
+    onClose()
   }
   // 목차 · 자료 선별로 처음 넘어갈 때 목차가 비어 있으면 바로 제안받는다 (요구사항 · 템플릿 · 참고 문서를 함께 본다)
   useEffect(() => { if (open && step === 3 && draft && !draft.sections.length && !busy) proposeAndCollect() }, [step, draft?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -580,12 +602,12 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
   ] : []
 
   return (
-    <Dialog open={open} onClose={() => !busy && onClose()} fullWidth maxWidth={false}
-      slotProps={{ paper: { sx: { width: 'min(1680px, calc(100% - 48px))', height: 'min(880px, calc(100% - 48px))', maxHeight: 'none', m: 3 } } }}>
+    <Dialog open={open} onClose={() => !busy && close()} fullWidth maxWidth={false}
+      slotProps={{ paper: { sx: { width: 'min(1680px, calc(100% - 48px))', height: 'min(1000px, calc(100% - 48px))', maxHeight: 'none', m: 3 } } }}>
       {/* 머리 */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 3, pt: 2, pb: 1.5 }}>
         <Typography variant="h6" noWrap sx={{ flex: 1, minWidth: 0 }}>{draft?.name || '새 자료 작성'}</Typography>
-        <IconButton size="small" aria-label="닫기" onClick={onClose} disabled={!!busy} sx={{ ml: 'auto', p: 0.5, position: 'relative', zIndex: 2 }}>
+        <IconButton size="small" aria-label="닫기" onClick={close} disabled={!!busy} sx={{ ml: 'auto', p: 0.5, position: 'relative', zIndex: 2 }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
@@ -609,7 +631,7 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
             {step === 0 && <InfoStep name={name} setName={setName} overview={overview} setOverview={setOverview} docFormat={docFormat} setDocFormat={setDocFormat} formLocked={!!draft?.template_form} />}
             {draft && step === 1 && <RequirementsStep {...props} />}
             {draft && step === 2 && <TemplateStep {...props} />}
-            {draft && step === 3 && <SourcesStep key={draft.id} {...props} proposeAndCollect={proposeAndCollect} />}
+            {draft && step === 3 && <SourcesStep key={draft.id} {...props} proposeAndCollect={proposeAndCollect} flushRef={flushRef} />}
             {draft && step === 4 && <WriteTab {...props} />}
           </Box>
         )}
