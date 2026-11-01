@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>사내 문서 AI 검색, 이렇게 동작합니다</title>
+<title>Confluence 지식 기반 AI 솔루션</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -198,7 +198,8 @@ const CLUSTER_EXTRAS=[
 ];
 
 
-const Q='장애 나면 누구한테 에스컬레이션해?';
+
+const Q='장애 나면 누구한테 에스컬레이션해?'; // 05 찾기 장표의 예시 질문
 
 const AGENDA=[
   ['01','한눈에 보기','전체 흐름'],
@@ -440,16 +441,14 @@ const SLIDES=[
 /* ───────── 렌더 ───────── */
 const deck=document.getElementById('deck');
 let cur=0;
-const bar=(crumb,right)=>`<div class="bar"><div class="mark">K</div><span class="name">Confluence <span style="color:var(--primary)">KB</span></span><span class="crumb">› ${esc(crumb)}</span><div class="right">${right||''}</div></div>`;
+const bar=(crumb,right)=>`<div class="bar"><div class="mark wide">SCP 실행그룹</div><span class="name">Confluence <span style="color:var(--primary)">KB</span></span><span class="crumb">› ${esc(crumb)}</span><div class="right">${right||''}</div></div>`;
 
 function rTitle(){
   return `<div class="slide">${bar('소개','')}
-    <div class="hero"><div class="over">부서 공유 · Confluence 지식 검색</div>
-      <h1>사내 문서 AI 검색,<br><span>이렇게 동작합니다</span></h1>
-      <div class="lead">Confluence 문서를 찾아 읽고, 출처를 달아 답해 주는 과정을 차례로 살펴봅니다</div>
+    <div class="hero">
+      <h1>Confluence 지식 기반<br><span>AI 솔루션</span></h1>
     </div>
     <div class="agenda">${AGENDA.map((a,i)=>`<div class="it" style="animation-delay:${.7+i*.1}s"><div class="n">${a[0]}</div><div class="t">${esc(a[1])}</div><div class="a">${esc(a[2])}</div></div>`).join('')}</div>
-    <div class="example">질문 하나로 끝까지 따라갑니다 — <b>"${esc(Q)}"</b></div>
   </div>`;
 }
 function rFlow(s,i){
