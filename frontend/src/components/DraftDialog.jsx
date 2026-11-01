@@ -15,6 +15,7 @@ import remarkGfm from 'remark-gfm'
 import * as api from '../api'
 import { FONT_SIZES, MONO_FONT } from '../theme'
 import { Breadcrumb } from './Common'
+import { useConfirm } from './ConfirmDialog'
 
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '')
 
@@ -68,6 +69,7 @@ function InfoStep({ name, setName, overview, setOverview, docFormat, setDocForma
 
 // ───────── 요구사항 ─────────
 function RequirementsStep({ draft, reload, setDraft, busy, setBusy, setError, notify }) {
+  const confirm = useConfirm()
   const fileRef = useRef(null)
   const [newReq, setNewReq] = useState('')
   const [adding, setAdding] = useState(false)
@@ -95,7 +97,7 @@ function RequirementsStep({ draft, reload, setDraft, busy, setBusy, setError, no
       {draft.files.length > 0 && (
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1.5 }}>
           {draft.files.map((f) => (
-            <Chip key={f.id} size="small" icon={<FileIcon />} label={`${f.file_name} · ${f.chars.toLocaleString()}자`} onDelete={() => window.confirm(`${f.file_name} 과 여기서 뽑은 요구사항을 지울까요?`) && act(() => api.deleteRequirementFile(draft.id, f.id))} />
+            <Chip key={f.id} size="small" icon={<FileIcon />} label={`${f.file_name} · ${f.chars.toLocaleString()}자`} onDelete={async () => (await confirm(`${f.file_name} 과 여기서 뽑은 요구사항을 지울까요?`, { ok: '지우기', danger: true })) && act(() => api.deleteRequirementFile(draft.id, f.id))} />
           ))}
         </Box>
       )}
@@ -116,6 +118,7 @@ function RequirementsStep({ draft, reload, setDraft, busy, setBusy, setError, no
 
 // ───────── 자료 선별 (목차 다듬기 포함) ─────────
 function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, proposeAndCollect, pending, setPending, flushRef }) {
+  const confirm = useConfirm()
   const [sectionId, setSectionId] = useState(draft.sections[0]?.id)
   const [sources, setSources] = useState([])
   const [loading, setLoading] = useState(false)
@@ -173,7 +176,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
     ;[ids[i], ids[j]] = [ids[j], ids[i]]
     act(() => api.reorderSections(draft.id, ids))
   }
-  const removeSection = () => window.confirm(`목차 "${section.title}" 와 그 자료를 지울까요? 배정된 요구사항은 미배정이 됩니다.`) && act(() => api.deleteSection(draft.id, sectionId))
+  const removeSection = async () => (await confirm(`목차 "${section.title}" 와 그 자료를 지울까요? 배정된 요구사항은 미배정이 됩니다.`, { ok: '지우기', danger: true })) && act(() => api.deleteSection(draft.id, sectionId))
   const addSection = async (e) => {
     e.preventDefault(); if (!newTitle.trim()) return
     await act(() => api.addSection(draft.id, newTitle.trim())); setNewTitle('')
@@ -232,7 +235,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
           })}
         </Box>
         <Button size="small" variant="outlined" sx={{ mt: 1 }} disabled={!!busy}
-          onClick={() => window.confirm('요구사항 · 템플릿 · 참고 문서로 목차를 새로 제안받을까요? 지금 목차와 고르지 않은 후보 · 만든 본문은 지워지고, 고른 자료는 가장 가까운 새 목차로 옮겨집니다.') && proposeAndCollect(true)}>
+          onClick={async () => (await confirm('요구사항 · 템플릿 · 참고 문서로 목차를 새로 제안받을까요?\n지금 목차와 고르지 않은 후보 · 만든 본문은 지워지고, 고른 자료는 가장 가까운 새 목차로 옮겨집니다.', { ok: '다시 제안받기', danger: true })) && proposeAndCollect(true)}>
           목차 다시 제안받기
         </Button>
       </Card>
@@ -365,6 +368,7 @@ function UploadSlot({ title, desc, accept, files, max, onUpload, onRemove, disab
 }
 
 function TemplateStep({ draft, setDraft, busy, setBusy, setError, notify }) {
+  const confirm = useConfirm()
   const fmt = draft.doc_format
   // 이미 목차가 있으면(뒤로 돌아와 바꾼 경우) 목차에는 바로 반영하지 않으므로 다시 제안받으라고 알린다
   const after = draft.sections.length ? ' 지금 목차에 반영하려면 목차 · 자료 선별에서 [목차 다시 제안받기] 를 누르세요.' : ' 다음 단계에서 목차를 만들 때 함께 참고합니다.'
@@ -373,19 +377,19 @@ function TemplateStep({ draft, setDraft, busy, setBusy, setError, notify }) {
     setBusy(msg)
     try { setDraft(await fn()); notify(done) } catch (e) { setError(e.message) } finally { setBusy('') }
   }
-  const confirmRemove = (what) => window.confirm(`${what}을 지울까요? 지금 목차 · 자료 · 본문은 그대로 둡니다.`)
+  const confirmRemove = (what) => confirm(`${what}을 지울까요? 지금 목차 · 자료 · 본문은 그대로 둡니다.`, { ok: '지우기', danger: true })
 
   return (
     <Box sx={{ display: 'flex', gap: 2, pt: 1, alignItems: 'flex-start' }}>
       <UploadSlot title="템플릿" accept={`.${fmt}`} max={1} disabled={!!busy}
         files={draft.template_form ? [{ id: 'form', name: draft.template_form }] : []}
         onUpload={(f) => run('템플릿을 읽는 중…', () => api.uploadTemplate(draft.id, f), `템플릿을 올렸습니다.${after}`)}
-        onRemove={() => confirmRemove('템플릿') && run('템플릿을 지우는 중…', () => api.removeTemplate(draft.id), '템플릿을 지웠습니다.')}
+        onRemove={async () => (await confirmRemove('템플릿')) && run('템플릿을 지우는 중…', () => api.removeTemplate(draft.id), '템플릿을 지웠습니다.')}
         desc={<>회사에서 쓰는 {fmt} 파일에 본문이 들어갈 자리를 <b>{'{{개요}}'}</b> 처럼 표시해 올리세요. 자리 표시마다 목차가 되고, 내보낼 때 그 자리에 본문이 들어갑니다. <b>{'{{문서명}} {{작성일}}'}</b> 은 자동으로 채워집니다.</>} />
       <UploadSlot title="참고 문서" accept=".docx,.pptx,.pdf,.md,.txt" max={5} disabled={!!busy}
         files={(draft.references || []).map((r) => ({ id: r.id, name: r.file_name, meta: `${r.chars.toLocaleString()}자` }))}
         onUpload={(f) => run(`${f.name} 을 읽고 소제목별로 나누는 중…`, () => api.uploadReference(draft.id, f), `참고 문서를 올렸습니다.${afterRef}`)}
-        onRemove={(rid) => window.confirm('참고 문서를 지울까요? 이 문서에서 모은 자료 후보도 함께 지워집니다.') && run('참고 문서를 지우는 중…', () => api.removeReference(draft.id, rid), '참고 문서를 지웠습니다.')}
+        onRemove={async (rid) => (await confirm('참고 문서를 지울까요? 이 문서에서 모은 자료 후보도 함께 지워집니다.', { ok: '지우기', danger: true })) && run('참고 문서를 지우는 중…', () => api.removeReference(draft.id, rid), '참고 문서를 지웠습니다.')}
         desc="컨플루언스에 없는 내용을 담은 문서를 최대 5개까지 올리세요. 자료를 모을 때 사내 문서와 함께 목차마다 관련 부분을 찾아 후보로 넣고, 체크한 부분은 본문을 쓸 때 내용의 근거로 씁니다." />
     </Box>
   )
@@ -461,6 +465,7 @@ function SectionCard({ draft, s, onGenerate, state, open, onToggle, setDraft, se
 }
 
 function WriteTab({ draft, setDraft, setError, notify }) {
+  const confirm = useConfirm()
   const [running, setRunning] = useState(null) // 생성 중인 목차 id
   const [waiting, setWaiting] = useState([]) // 차례를 기다리는 목차 id (다시 생성 대상은 화면에서 비워 둔다)
   const [progress, setProgress] = useState(null) // { done, total }
@@ -498,7 +503,7 @@ function WriteTab({ draft, setDraft, setError, notify }) {
     <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
         <Button size="small" variant="contained" onClick={() => genAll(true)} disabled={!!running || !empty}>빈 목차 모두 생성 ({empty})</Button>
-        <Button size="small" variant="outlined" onClick={() => window.confirm('모든 목차를 다시 생성할까요? 직접 고친 내용도 덮어씁니다.') && genAll(false)} disabled={!!running}>전체 다시 생성</Button>
+        <Button size="small" variant="outlined" onClick={async () => (await confirm('모든 목차를 다시 생성할까요? 직접 고친 내용도 덮어씁니다.', { ok: '다시 생성', danger: true })) && genAll(false)} disabled={!!running}>전체 다시 생성</Button>
         <Button size="small" variant="outlined" onClick={toggleAll}>{allClosed ? '모두 펼치기' : '모두 접기'}</Button>
         {(uncovered.length > 0 || unassigned.length > 0) && (
           <Tooltip title={<>
@@ -536,6 +541,7 @@ const STEPS = ['기본 정보', '요구사항', '템플릿 · 참고 문서', '�
 const resumeStep = (d) => (d.sections.some((s) => s.body) ? 4 : d.sections.length ? 3 : 1)
 
 export default function DraftDialog({ open, draftId, space, onClose, onChanged }) {
+  const confirm = useConfirm()
   const [draft, setDraft] = useState(null)
   const [step, setStep] = useState(0)
   const [busy, setBusy] = useState('')
@@ -593,8 +599,8 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
     } catch (e) { setError(e.message) }
   }
   // 닫기는 저장하지 않는다 (저장은 단계를 옮길 때만). 저장 안 된 수정이 있으면 버릴지 묻는다
-  const close = () => {
-    if (flushRef.current?.dirty && !window.confirm('저장되지 않은 수정이 있습니다. 저장하지 않고 닫을까요?')) return
+  const close = async () => {
+    if (flushRef.current?.dirty && !(await confirm('저장되지 않은 수정이 있습니다. 저장하지 않고 닫을까요?', { ok: '닫기', danger: true }))) return
     flushRef.current = null
     onClose()
   }
@@ -602,7 +608,7 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
   useEffect(() => { if (open && step === 3 && draft && !draft.sections.length && !busy) proposeAndCollect() }, [step, draft?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const remove = async () => {
-    if (!window.confirm(`"${draft.name}" 을 삭제할까요? 모은 자료와 생성 결과가 모두 지워집니다.`)) return
+    if (!(await confirm(`"${draft.name}" 을 삭제할까요? 모은 자료와 생성 결과가 모두 지워집니다.`, { ok: '삭제', danger: true }))) return
     try { await api.deleteDraft(draft.id); onChanged?.(); onClose() } catch (e) { setError(e.message) }
   }
 

@@ -5,6 +5,7 @@ import {
 import * as api from '../api'
 import { FONT_SIZES } from '../theme'
 import DraftDialog from '../components/DraftDialog'
+import { ConfirmProvider } from '../components/ConfirmDialog'
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '')
 
@@ -71,7 +72,9 @@ export default function DraftView({ space }) {
       </TableContainer>
       </Card>
 
-      <DraftDialog open={!!dialog} draftId={dialog?.id || null} space={space} onChanged={load} onClose={() => { setDialog(null); load() }} />
+      <ConfirmProvider>
+        <DraftDialog open={!!dialog} draftId={dialog?.id || null} space={space} onChanged={load} onClose={() => { setDialog(null); load() }} />
+      </ConfirmProvider>
     </Box>
   )
 }
