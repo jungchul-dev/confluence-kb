@@ -13,7 +13,7 @@
 /* ───────── 다이어그램 빌더 ─────────
    노드 종류
      (기본)  제목 + 보조 줄, 가운데 정렬. tone:true 면 연한 색 배경. shape:'db' 는 원통
-     text    왼쪽 정렬 줄 목록. [[강조]] = 노드 색, {{강조}} = 주황
+     text    왼쪽 정렬 줄 목록. [[강조]] = 노드 색, {{강조}} = 주황. vcenter:true 면 (제목 없이) 위아래 가운데
      rows    [라벨, 값] 표
      bars    [이름, 점수, 색, 메모] 막대
      chips   [라벨, [조각…]] 단어 조각.  *강조  ~떼어냄  !잘못 쪼개짐  →화살표  >메모
@@ -62,7 +62,8 @@ function renderNode(n){
   if(n.kind==='text'){
     const fs=n.fs||19, lh=n.lh||Math.round(fs*1.7);
     inner+=head(n,col);
-    let y=n.y+(n.title?78:44);
+    // vcenter: 제목 없는 줄 목록을 상자 위아래 가운데에 둔다
+    let y=n.vcenter?Math.round(n.y+(n.h-((n.lines||[]).length-1)*lh)/2+fs*.35):n.y+(n.title?78:44);
     (n.lines||[]).forEach((ln,k)=>{
       if(ln!=='') inner+=`<g class="ln" ${lnT(t0,k)}><text x="${n.x+24}" y="${y}" font-size="${fs}" font-weight="500" fill="#27272a" style="white-space:pre${n.mono?';font-family:var(--mono)':''}">${mk(ln,col)}</text></g>`;
       y+=lh;
@@ -206,7 +207,7 @@ const AGENDA=[
   ['04','저장소에 더한 도구','단어 색인 · 형태소 분석'],
   ['05','찾기','리트리벌'],
   ['06','다시 고르기','리랭킹'],
-  ['07','답하기','답변 생성'],
+  ['07','답하기','RAG'],
   ['08','주제별로 묶기','클러스터링'],
   ['09','자료 작성','목차 생성 · 초안 작성'],
 ];
@@ -358,7 +359,7 @@ const SLIDES=[
  ]}},
 
 /* 7 답하기 */
-{num:'07',crumb:'답하기',title:'답하기',tech:'답변 생성',
+{num:'07',crumb:'답하기',title:'답하기',tech:'RAG',
  easy:'<b>오픈북 시험</b>과 같습니다. 펼쳐 준 페이지에 없는 건 "모른다" 고 답하게 하고, 문장마다 <b>어느 문서에서 왔는지</b> 번호를 붙입니다.',
  ko:['AI 에게 주는 약속도 <b>한국어로</b> 작성했습니다','"그건", "거기서" 같은 말은 <b>앞 대화 내용으로 바꿔서</b> 다시 찾습니다'],
  notes:'고른 조각을 문서별로 묶고, 약속 4가지와 함께 AI 에게 보냅니다. 답변의 [1], [2] 를 누르면 원문 Confluence 페이지로 갑니다. 이어서 질문하면 앞 대화를 보고 질문을 완성한 뒤 다시 찾습니다.',
@@ -404,25 +405,25 @@ const SLIDES=[
 /* 9 자료 작성 */
 {num:'09',crumb:'자료 작성',title:'자료 작성',tech:'목차 생성 · 자료 선별 · 초안 작성',
  easy:'요구사항 · 템플릿 · 참고 문서를 넣으면 AI 가 <b>목차를 생성</b>하고, 목차마다 <b>질문할 때와 같은 방법으로 자료를 찾아</b> 초안을 씁니다. 사람은 <b>자료를 고르고 검토</b>합니다.',
- koTitle:'앞 장표와 같은 기술',
- ko:['요구사항 · 참고 문서도 <b>숫자로 바꿔</b> 비교합니다 (03)','자료 찾기는 <b>찾기 → 다시 고르기</b>를 그대로 씁니다 (05 · 06)','본문도 <b>고른 글만 보고</b> 쓰고, 근거가 없으면 지어내지 않습니다 (07)'],
+ koTitle:'사용한 기술',
+ ko:['요구사항 · 참고 문서도 <b>숫자로 바꿔</b> 비교합니다 (임베딩)','자료 찾기는 <b>찾기 → 다시 고르기</b>를 그대로 씁니다 (리트리벌 · 리랭킹)','본문도 <b>고른 글만 보고</b> 쓰고, 근거가 없으면 지어내지 않습니다 (RAG)'],
  notes:'첫째 줄은 목차 생성입니다. 요구사항 파일은 AI 가 항목을 뽑고, 템플릿은 자리 표시를, 참고 문서는 소제목을 읽어 AI 가 목차를 만듭니다. 목차마다 제목 · 찾을 내용 · 작성 지침이 생기고, 요구사항은 숫자로 바꿔 가장 가까운 목차에 붙습니다. 둘째 줄은 자료 선별입니다. 찾을 내용과 요구사항으로 검색어를 만들어 사내 문서는 질문할 때와 같은 방식으로, 참고 문서는 올릴 때 미리 바꿔 둔 숫자로 찾습니다. 셋째 줄은 작성 · 검토입니다. 체크한 자료와 작성 지침 · 요구사항을 AI 에게 주어 목차별로 쓰고, 다 쓰면 요구사항이 들어갔는지 AI 가 다시 확인합니다.',
  diagram:{groups:[
    {id:'g1',x:15,y:10,w:1350,h:228,label:'목차 생성',color:'green',t:0},
    {id:'g2',x:15,y:252,w:1350,h:228,label:'자료 선별',color:'blue',t:2.2},
    {id:'g3',x:15,y:494,w:1350,h:228,label:'작성 · 검토',color:'rose',t:4.4},
  ],nodes:[
-   {id:'a1',x:40,y:68,w:330,h:142,kind:'text',fs:16,lh:28,color:'neutral',t:.2,lines:['작성 개요','요구사항 파일 → AI 가 [[항목 뽑기]]','템플릿 → [[{{자리 표시}}]] 읽기','참고 문서 → [[소제목]] 읽기']},
+   {id:'a1',x:40,y:68,w:330,h:142,kind:'text',vcenter:true,fs:16,lh:28,color:'neutral',t:.2,lines:['작성 개요','요구사항 파일 → AI 가 [[항목 뽑기]]','템플릿 → [[{{자리 표시}}]] 읽기','참고 문서 → [[소제목]] 읽기']},
    {id:'a2',x:420,y:68,w:230,h:142,title:'AI 목차 생성',fs:21,sub:'템플릿이 있으면\n자리 표시 = 목차 제목',color:'green',t:.8},
-   {id:'a3',x:700,y:58,w:300,h:162,kind:'text',title:'목차마다',fs:16,lh:29,color:'green',tone:true,t:1.3,lines:['제목','[[찾을 내용]] — 검색어','[[작성 지침]] — 쓰는 방법']},
+   {id:'a3',x:700,y:68,w:300,h:142,title:'목차마다',fs:21,sub:'제목\n[[찾을 내용]] — 검색어\n[[작성 지침]] — 쓰는 방법',color:'green',tone:true,t:1.3},
    {id:'a4',x:1050,y:68,w:290,h:142,title:'요구사항 붙이기',fs:21,sub:'숫자로 바꿔\n가장 가까운 목차에',color:'green',t:1.8},
 
-   {id:'b1',x:40,y:316,w:330,h:130,kind:'text',fs:16,lh:30,color:'blue',t:2.4,lines:['[[찾을 내용]]','+ 붙은 요구사항 앞 3개','+ 작성 개요 앞부분']},
+   {id:'b1',x:40,y:316,w:330,h:130,kind:'text',vcenter:true,fs:16,lh:30,color:'blue',t:2.4,lines:['[[찾을 내용]]','+ 붙은 요구사항 앞 3개','+ 작성 개요 앞부분']},
    {id:'b2',x:420,y:296,w:580,h:78,title:'사내 문서에서 찾기',fs:19,sub:'뜻 + 단어로 찾기 → 다시 고르기 → 후보 10개',color:'blue',t:2.9},
    {id:'b3',x:420,y:388,w:580,h:78,title:'참고 문서에서 찾기',fs:19,sub:'올릴 때 소제목별로 바꿔 둔 숫자로 → 가까운 조각 3개',color:'violet',t:3.2},
    {id:'b4',x:1050,y:300,w:290,h:162,title:'사람이 체크',fs:21,sub:'처음엔 위에서 4개 체크\n넣고 빼서 고르기',color:'blue',tone:true,t:3.8},
 
-   {id:'c1',x:40,y:552,w:330,h:142,kind:'text',fs:16,lh:30,color:'rose',t:4.6,lines:['체크한 자료 (약 9천 토큰까지)','작성 지침 · 요구사항','앞 목차 요약 (용어 · 수치 맞추기)']},
+   {id:'c1',x:40,y:552,w:330,h:142,title:'AI 전달',fs:21,sub:'체크한 자료 (약 9천 토큰까지)\n작성 지침 · 요구사항\n앞 목차 요약 (용어 · 수치 맞추기)',color:'rose',t:4.6},
    {id:'c2',x:420,y:552,w:270,h:142,title:'AI 본문 작성',fs:21,sub:'근거가 없는 곳은\n⚠ 확인 필요',color:'rose',t:5.1},
    {id:'c3',x:740,y:552,w:260,h:142,title:'AI 반영 점검',fs:21,sub:'요구사항마다\n✅ 반영 · ❌ 빠짐',color:'rose',t:5.5},
    {id:'c4',x:1050,y:552,w:290,h:142,title:'내보내기',fs:21,sub:'템플릿 자리에 채우기\n없으면 새 docx · pptx',color:'rose',tone:true,t:5.9},
@@ -483,7 +484,8 @@ function show(i){
   const fresh=[...deck.querySelectorAll('.slide')][i], d=fresh.querySelector('.diagram');
   if(d){ d.querySelector('.svgwrap').innerHTML=diagram(SLIDES[i].diagram); d.onclick=()=>openModal(i); }
   [...document.getElementById('dots').children].forEach((x,k)=>x.classList.toggle('on',k===i));
-  document.getElementById('pos').textContent=`${i+1} / ${SLIDES.length}`;
+  // 표지는 번호를 매기지 않고, 본문 장표부터 1 / N
+  document.getElementById('pos').textContent=SLIDES[i].kind==='title'?'':`${i} / ${SLIDES.length-1}`;
   document.getElementById('nb').textContent=SLIDES[i].notes||'';
   document.getElementById('next').style.visibility=i===SLIDES.length-1?'hidden':'visible';
   document.getElementById('prev').style.visibility=i===0?'hidden':'visible';
