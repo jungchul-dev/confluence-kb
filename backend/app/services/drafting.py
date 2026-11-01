@@ -1,9 +1,9 @@
 """자료 작성 — 요구사항 추출 · 목차 제안 · 목차별 자료 수집 · 템플릿 적용 · 목차별 생성 · 요구사항 반영 점검.
 
 흐름: 작성 건(이름 · 작성 개요 · 문서 형식 docx|pptx) → 요구사항 파일 → 항목 추출
-     → 목차 제안(LLM) + 요구사항 배정 → 목차별 자료 자동 수집(기존 하이브리드 검색 + 리랭크) → 사람이 선별
-     → (선택) 템플릿: 양식 파일(자리 표시 → 목차 · 내보내기 서식) / 참고 문서(소제목 → 목차, 생성 때 형식 예시)
-       목차가 바뀌면 고른 자료 · 요구사항을 가장 가까운 새 목차로 옮긴다
+     → (선택) 템플릿(양식 · {{자리 표시}} → 목차 제목 · 내보내기 서식) / 참고 문서(컨플루언스에 없는 내용, 최대 5개)
+     → 목차 제안(LLM, 요구사항 · 템플릿 · 참고 문서 주제) + 요구사항 배정
+     → 목차별 자료 자동 수집(사내 문서 하이브리드 검색 + 리랭크, 참고 문서 부분은 저장된 임베딩) → 사람이 선별
      → 목차별 생성 → 내보내기(services/draft_export.py)
 """
 import json
@@ -13,14 +13,14 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Chunk, Document, Draft, DraftRequirement, DraftSection, DraftSource, Template
+from app.db.models import Chunk, Document, Draft, DraftReference, DraftReferencePart, DraftRequirement, DraftSection, DraftSource
 from app.permissions import CurrentUser
 from app.services import answer as llm
 from app.services.context import approx_tokens
-from app.services.embeddings import embed_texts
+from app.services.embeddings import embed_query, embed_texts
 from app.services.rerank import rerank
 from app.services.retrieval import hybrid_search
 
@@ -159,28 +159,28 @@ def _reference_parts(text: str) -> List[str]:
     return [p for p in parts if p.strip()]
 
 
-REFERENCE_EXCERPT_CHARS = 1000
+MAX_REFERENCES = 5            # 작성 건당 참고 문서 수
+REFERENCE_PART_CHARS = 1500   # 부분 하나(= 자료 후보 1건)로 저장하는 글자 수
+REF_CANDIDATES = 3            # 목차마다 참고 문서에서 넣는 후보 수
+REF_SELECT_MIN = 0.5          # 이 유사도 이상인 참고 문서 후보는 처음부터 체크해 둔다
 
 
-async def reference_excerpt(ref_content: Optional[str], section: DraftSection) -> Optional[str]:
-    """참고 문서에서 이 목차와 가장 가까운 부분 (형식 예시용). 제목이 같으면 그 부분, 아니면 임베딩으로 고른다."""
-    parts = _reference_parts(ref_content or "")
-    if not parts:
-        return None
-    key = _strip_number(section.title)
-    for p in parts:
+async def build_reference_parts(db: AsyncSession, ref: DraftReference) -> int:
+    """참고 문서를 소제목 단위로 나눠 임베딩과 함께 저장한다 (올릴 때 한 번). 부분 하나가 자료 후보 1건이 된다.
+    로컬 임베딩 서버는 여러 글을 한 번에 보내면 매우 느려서(26건 82초 · 1건 0.6초) 하나씩 보낸다."""
+    parts = _reference_parts(ref.content)
+    for i, p in enumerate(parts[:200]):
         first = p.splitlines()[0]
-        if first.startswith("## ") and _strip_number(_clean_heading(first[3:])) == key:
-            return p[:REFERENCE_EXCERPT_CHARS]
-    if len(parts) == 1:
-        return parts[0][:REFERENCE_EXCERPT_CHARS]
-    try:
-        vecs = await embed_texts([section_text(section)] + [p[:1500] for p in parts])
-    except Exception as e:  # noqa: BLE001
-        logger.warning("reference excerpt embedding failed: %s", e)
-        return parts[0][:REFERENCE_EXCERPT_CHARS]
-    best = max(range(1, len(vecs)), key=lambda i: _cos(vecs[0], vecs[i]))
-    return parts[best - 1][:REFERENCE_EXCERPT_CHARS]
+        heading = _clean_heading(first[3:]) if first.startswith("## ") else None
+        text = p[:REFERENCE_PART_CHARS]
+        try:
+            vec = (await embed_texts([text[:1000]]))[0]
+        except Exception as e:  # noqa: BLE001
+            logger.warning("reference part embedding failed: %s", e)
+            vec = None
+        db.add(DraftReferencePart(reference_id=ref.id, ordinal=i, heading=heading, text=text, embedding=vec))
+    await db.flush()
+    return len(parts[:200])
 
 
 # ───────── 요구사항 추출 · 배정 ─────────
@@ -287,17 +287,17 @@ async def assign_requirements(db: AsyncSession, draft: Draft, *, only_unassigned
 
 # ───────── 목차 제안 · 목차 바꾸기 ─────────
 
-OUTLINE_PROMPT = """당신은 사내 문서의 목차를 짜는 편집자입니다. 문서 이름 · 작성 개요 · 요구사항 · (있으면) 참고 문서 목차를 보고 이 문서에 알맞은 목차를 제안합니다.
+OUTLINE_PROMPT = """당신은 사내 문서의 목차를 짜는 편집자입니다. 문서 이름 · 작성 개요 · 요구사항 · (있으면) 참고 문서 주제를 보고 이 문서에 알맞은 목차를 제안합니다.
 규칙:
 1. 목차는 4~8개. 제목 앞에 "1." 처럼 번호를 붙입니다.
 2. 요구사항이 있으면 모든 요구사항이 어느 한 목차에서 다뤄지도록 짭니다.
-3. '참고 문서 목차' 가 있으면 그 구성 · 순서를 바탕으로 하되, 이번 문서의 개요 · 요구사항에 맞게 빼거나 더하고 이름을 고칩니다.
+3. '참고 문서 주제' 는 이번 문서를 위해 따로 받은 자료의 소제목입니다. 개요 · 요구사항과 관련된 주제는 어느 목차에서든 다뤄지게 합니다 (구성을 그대로 따를 필요는 없습니다).
 4. query 는 사내 문서에서 이 목차의 근거 자료를 찾을 검색어입니다 (명사 위주 3~8단어).
 5. guide 는 이 목차에 쓸 내용 · 형식 · 분량 지침 한두 문장입니다.
 6. JSON 배열만 출력합니다: [{"title": "1. 개요", "query": "...", "guide": "..."}]"""
 
 FIXED_OUTLINE_PROMPT = """당신은 사내 문서의 목차를 다듬는 편집자입니다. 목차 제목은 템플릿으로 정해져 있어 바꿀 수 없습니다.
-문서 이름 · 작성 개요 · 요구사항 · (있으면) 참고 문서 목차를 보고, 주어진 목차마다 찾을 내용과 작성 지침을 채웁니다.
+문서 이름 · 작성 개요 · 요구사항 · (있으면) 참고 문서 주제를 보고, 주어진 목차마다 찾을 내용과 작성 지침을 채웁니다.
 규칙:
 1. 주어진 목차를 같은 순서 · 같은 개수로, title 은 그대로 씁니다.
 2. 요구사항이 있으면 각 요구사항을 가장 알맞은 목차의 guide 에 반영합니다.
@@ -309,18 +309,18 @@ FALLBACK_OUTLINE = ["1. 개요", "2. 현황 및 배경", "3. 주요 내용", "4.
 
 
 async def propose_outline(draft: Draft, reqs: List[DraftRequirement], *, fixed: Optional[List[OutlineItem]] = None,
-                          reference: Optional[List[OutlineItem]] = None) -> List[OutlineItem]:
+                          references: Optional[List[Tuple[str, List[OutlineItem]]]] = None) -> List[OutlineItem]:
     """목차 제안. 요구사항 · 템플릿 · 참고 문서를 함께 본다.
     - fixed(템플릿의 자리 표시 목차)가 있으면 제목 · 순서 · 자리 표시는 그대로 두고 찾을 내용 · 작성 지침만 채운다 (내보낼 때 자리에 맞춰 넣어야 하므로)
-    - reference(참고 문서 소제목)가 있으면 그 구성을 바탕으로 제안한다
-    LLM 이 실패하면 fixed → reference → 일반 목차 순으로 그대로 쓴다."""
+    - references(참고 문서별 (파일 이름, 소제목 목록), 최대 5개)는 다룰 주제 힌트로만 준다 (참고 문서는 내용 자료, 형식은 템플릿)
+    LLM 이 실패하면 fixed → 일반 목차 순으로 그대로 쓴다."""
     parts = [f"문서 이름: {draft.name}"]
     if draft.overview.strip():
         parts.append(f"작성 개요:\n{draft.overview.strip()}")
     if reqs:
         parts.append("요구사항:\n" + "\n".join(f"- {('(' + r.code + ') ') if r.code else ''}{r.content}" for r in reqs[:60]))
-    if reference:
-        parts.append("참고 문서 목차:\n" + "\n".join(f"- {it.title}" for it in reference[:40]))
+    for i, (name, items_) in enumerate(references or [], start=1):
+        parts.append(f"참고 문서 주제 {i} ({name}):\n" + "\n".join(f"- {it.title}" for it in items_[:40]))
     if fixed:
         parts.append("정해진 목차:\n" + "\n".join(f"- {it.title}" for it in fixed))
     items: List[OutlineItem] = []
@@ -346,8 +346,6 @@ async def propose_outline(draft: Draft, reqs: List[DraftRequirement], *, fixed: 
         return merged
     if items:
         return items[:12]
-    if reference:
-        return reference[:12]
     return [OutlineItem(title=t, query=f"{draft.name} {_strip_number(t)}") for t in FALLBACK_OUTLINE]
 
 
@@ -368,7 +366,7 @@ async def replace_outline(db: AsyncSession, draft: Draft, items: List[OutlineIte
         seen = set()
         for src, v in zip(keep, cvecs):
             best = max(range(len(new)), key=lambda i: _cos(v, svecs[i]))
-            key = (best, src.document_id, src.chunk_ordinal)
+            key = (best, src.reference_part_id or src.document_id, src.chunk_ordinal)
             if key in seen:  # 여러 목차에서 같은 조각을 골랐으면 한 번만 남긴다
                 await db.delete(src)
                 continue
@@ -391,6 +389,11 @@ async def _source_vectors(db: AsyncSession, sources: List[DraftSource]) -> List[
     """자료의 임베딩. 색인 때 저장해 둔 벡터(조각 = chunks.embedding, 문서 전체 = documents.embedding)를 그대로 쓰고,
     원문이 지워졌거나 재색인으로 조각 번호가 바뀌어 못 찾은 것만 새로 계산한다.
     (로컬 임베딩 서버는 긴 글을 한꺼번에 보내면 매우 느려서, 자료 26건을 새로 계산하면 80초 넘게 걸렸다)"""
+    part_ids = {s.reference_part_id for s in sources if s.reference_part_id}
+    by_part: Dict = {}
+    if part_ids:
+        rows = (await db.execute(select(DraftReferencePart.id, DraftReferencePart.embedding).where(DraftReferencePart.id.in_(part_ids), DraftReferencePart.embedding.isnot(None)))).all()
+        by_part = {r.id: list(r.embedding) for r in rows}
     chunk_keys = {(s.document_id, s.chunk_ordinal) for s in sources if s.document_id and s.chunk_ordinal is not None}
     doc_ids = {s.document_id for s in sources if s.document_id and s.chunk_ordinal is None}
     by_chunk: Dict = {}
@@ -405,7 +408,9 @@ async def _source_vectors(db: AsyncSession, sources: List[DraftSource]) -> List[
         rows = (await db.execute(select(Document.id, Document.embedding).where(Document.id.in_(doc_ids), Document.embedding.isnot(None)))).all()
         by_doc = {r.id: list(r.embedding) for r in rows}
     vecs: List[Optional[List[float]]] = [
-        by_chunk.get((s.document_id, s.chunk_ordinal)) if s.chunk_ordinal is not None else by_doc.get(s.document_id) for s in sources
+        by_part.get(s.reference_part_id) if s.reference_part_id
+        else by_chunk.get((s.document_id, s.chunk_ordinal)) if s.chunk_ordinal is not None else by_doc.get(s.document_id)
+        for s in sources
     ]
     missing = [i for i, v in enumerate(vecs) if v is None]
     if missing:
@@ -437,7 +442,9 @@ async def collect_section(db: AsyncSession, draft: Draft, section: DraftSection,
     top, _ = await rerank(q, candidates, top_k=AUTO_CANDIDATES * 2)
 
     keep = (await db.execute(select(DraftSource).where(DraftSource.section_id == section.id))).scalars().all()
-    kept_keys = {(s.document_id, s.chunk_ordinal) for s in keep if s.selected or s.origin != "auto"}
+    kept_keys = {(s.document_id, s.chunk_ordinal) for s in keep if (s.selected or s.origin != "auto") and not s.reference_part_id}
+    kept_parts = {s.reference_part_id for s in keep if (s.selected or s.origin != "auto") and s.reference_part_id}
+    had_selection = any(s.selected for s in keep)
     await db.execute(delete(DraftSource).where(DraftSource.section_id == section.id, DraftSource.origin == "auto", DraftSource.selected.is_(False)))
 
     doc_hash = await _doc_hashes(db, {c.document_id for c in top})
@@ -451,10 +458,40 @@ async def collect_section(db: AsyncSession, draft: Draft, section: DraftSection,
             draft_id=draft.id, section_id=section.id, origin="auto", document_id=c.document_id,
             doc_title=c.title, doc_path=c.path, doc_url=c.url, heading=c.heading, chunk_ordinal=c.ordinal,
             content=c.content, content_hash=doc_hash.get(c.document_id), score=c.rerank_score,
-            selected=added < AUTO_SELECT and not any(s.selected for s in keep),
+            selected=added < AUTO_SELECT and not had_selection,
         ))
         added += 1
+    added += await _collect_references(db, draft, section, q, kept_parts, had_selection)
     await db.flush()
+    return added
+
+
+async def _collect_references(db: AsyncSession, draft: Draft, section: DraftSection, q: str, kept_parts: set, had_selection: bool) -> int:
+    """참고 문서(컨플루언스에 없는 내용)에서 같은 검색어와 가까운 부분을 후보로 넣는다. 부분 임베딩은 올릴 때 저장해 둔 것을 쓴다."""
+    has_refs = (await db.execute(select(func.count()).select_from(DraftReference).where(DraftReference.draft_id == draft.id))).scalar()
+    if not has_refs:
+        return 0
+    qv = await embed_query(q)
+    dist = DraftReferencePart.embedding.cosine_distance(qv)
+    rows = (await db.execute(
+        select(DraftReferencePart, DraftReference.file_name, dist.label("dist"))
+        .join(DraftReference, DraftReference.id == DraftReferencePart.reference_id)
+        .where(DraftReference.draft_id == draft.id, DraftReferencePart.embedding.isnot(None))
+        .order_by(dist).limit(REF_CANDIDATES + len(kept_parts))
+    )).all()
+    added = 0
+    for part, file_name, d in rows:
+        if added >= REF_CANDIDATES:
+            break
+        if part.id in kept_parts:
+            continue
+        sim = 1.0 - float(d)
+        db.add(DraftSource(
+            draft_id=draft.id, section_id=section.id, origin="auto", reference_part_id=part.id,
+            doc_title=file_name, doc_path=f"참고 문서 > {file_name}", doc_url=None, heading=part.heading, chunk_ordinal=part.ordinal,
+            content=part.text, score=sim, selected=sim >= REF_SELECT_MIN and not had_selection,
+        ))
+        added += 1
     return added
 
 
@@ -499,14 +536,13 @@ def user_can_read(doc: Document, user: CurrentUser, skip: bool) -> bool:
 GEN_PROMPT = """당신은 사내 문서 작성자입니다. 주어진 '참고 자료'만 근거로 문서의 한 목차를 씁니다.
 규칙:
 1. 참고 자료에 있는 사실만 씁니다. 근거가 없는 내용(수치·일정·담당·제품명 등)은 지어내지 말고 [확인 필요: 무엇이 필요한지] 로 표시합니다.
-2. 근거 문장 끝에 참고 자료 번호를 [1], [2] 형식으로 붙입니다.
+2. 참고 자료 번호([1] 등)나 출처 · 문서 이름을 본문에 쓰지 않습니다. 완성된 문서처럼 자연스럽게 씁니다.
 3. 금액·일정·수량·SLA 같은 숫자는 원문 그대로 옮깁니다.
 4. '요구사항' 이 주어지면 빠짐없이 다루고, 요구사항 번호가 있으면 본문에 (SFR-001) 처럼 밝힙니다.
 5. 참고 자료에 나온 다른 고객 · 프로젝트 · 조직 이름을 이번 문서의 대상처럼 쓰지 않습니다. 이번 문서에 맞게 일반화하거나 작성 개요의 이름으로 바꿉니다.
 6. 작성 지침의 형식·분량을 따릅니다. 표가 어울리면 마크다운 표를 씁니다.
 7. 목차 제목은 다시 쓰지 말고 본문만 마크다운으로 출력합니다. 하위 제목이 필요하면 ### 를 씁니다.
-8. '참고 문서 형식 예시' 는 다른 문서의 일부입니다. 구성 방식 · 문체 · 분량만 흉내 내고, 그 안의 문장 · 항목 · 이름 · 수치는 절대 옮기지 않습니다. 내용은 오직 '참고 자료' 와 '요구사항' 에서만 가져옵니다.
-9. '문서 형식' 이 발표 자료(pptx)면 슬라이드에 들어갈 개조식 글머리표 위주로 짧게 씁니다. ### 소제목 하나가 슬라이드 한 장이 되며, 소제목마다 글머리표 3~6개, 항목은 한 줄 이내로 씁니다."""
+8. '문서 형식' 이 발표 자료(pptx)면 슬라이드에 들어갈 개조식 글머리표 위주로 짧게 씁니다. ### 소제목 하나가 슬라이드 한 장이 되며, 소제목마다 글머리표 3~6개, 항목은 한 줄 이내로 씁니다."""
 
 
 def _source_block(i: int, s: DraftSource) -> str:
@@ -550,17 +586,12 @@ async def generate_section(db: AsyncSession, draft: Draft, section: DraftSection
         parts.append(f"작성 지침:\n{section.guide.strip()}")
     if reqs:
         parts.append("요구사항:\n" + "\n".join(f"- {('(' + r.code + ') ') if r.code else ''}{r.content}" for r in reqs))
-    if draft.template_id:
-        ref = (await db.execute(select(Template.ref_content).where(Template.id == draft.template_id))).scalar_one_or_none()
-        excerpt = await reference_excerpt(ref, section) if ref else None
-        if excerpt:
-            parts.append("참고 문서 형식 예시 (다른 문서의 일부 — 형식만 참고하고 내용은 옮기지 말 것):\n<<<형식 예시 시작>>>\n"
-                         f"{excerpt}\n<<<형식 예시 끝>>>")
     parts.append("참고 자료:\n\n" + ("\n\n=====\n\n".join(blocks) if blocks else "(선택된 자료 없음 — 모든 사실 내용은 [확인 필요] 로 표시)"))
     parts.append("본문:")
 
     body = await llm.chat(GEN_PROMPT, "\n\n".join(parts), temperature=0.2, max_tokens=4000, timeout=180.0, extra_body=NO_THINK)
-    section.body = _strip_title(body, section.title)
+    # 작성본에는 출처를 달지 않는다. 지시와 달리 [1] 같은 번호가 남으면 지운다 (어떤 자료를 썼는지는 citations 에 남긴다)
+    section.body = _strip_title(re.sub(r"[ \t]?(\[\d+\])+", "", body or ""), section.title)
     section.citations = citations
     section.version = (section.version or 0) + 1
     from datetime import datetime, timezone

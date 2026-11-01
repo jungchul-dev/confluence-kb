@@ -1,9 +1,9 @@
 """작성 건 → docx / pptx (작성 건의 문서 형식을 따른다).
 
 - 템플릿 파일이 있으면 그 파일의 {{자리 표시}} 를 목차 본문으로 채운다 (서식·표지는 템플릿 그대로).
-  예약 자리 표시: {{문서명}} {{작성일}} {{참고자료}}
-- 양식 파일이 없으면 새로 만든다. docx: 제목 → 목차별 제목·본문 → 참고 자료, pptx: 표지 → 목차별 슬라이드 → 참고 자료.
-- 목차마다 [1] [2] 로 매긴 출처 번호를 문서 전체 기준 번호로 다시 매기고, 끝에 참고 자료 목록을 붙인다.
+  예약 자리 표시: {{문서명}} {{작성일}} ({{참고자료}} 는 예전 양식 호환용 — 출처를 달지 않으므로 그 문단을 지운다)
+- 양식 파일이 없으면 새로 만든다. docx: 제목 → 작성 개요 → 목차별 제목·본문, pptx: 표지 → 작성 개요 → 목차별 슬라이드.
+- 작성본에는 출처를 달지 않는다. 본문에 남은 [1] [2] 같은 번호는 지운다 (예전에 만든 본문 호환).
 """
 import io
 import re
@@ -16,26 +16,13 @@ RESERVED = {"문서명", "작성일", "참고자료"}
 _CITE = re.compile(r"\[(\d+)\]")
 
 
-def renumber(sections: List[DraftSection]) -> Tuple[Dict[str, str], List[dict]]:
-    """목차별 출처 번호 → 전체 번호. (목차 id → 번호를 바꾼 본문, 참고 자료 목록) 을 돌려준다."""
-    refs: List[dict] = []
-    key_to_n: Dict[str, int] = {}
-    bodies: Dict[str, str] = {}
-    for s in sections:
-        local: Dict[int, int] = {}
-        for c in s.citations or []:
-            key = c.get("document_id") or c.get("url") or c.get("title")
-            if key not in key_to_n:
-                refs.append(c)
-                key_to_n[key] = len(refs)
-            local[int(c["n"])] = key_to_n[key]
-        body = _CITE.sub(lambda m: f"[{local.get(int(m.group(1)), m.group(1))}]", s.body or "")
-        bodies[str(s.id)] = re.sub(r"(\[\d+\])(?:\1)+", r"\1", body)  # 같은 문서라 [1][1] 로 겹치면 하나로
-    return bodies, refs
+def clean_bodies(sections: List[DraftSection]) -> Dict[str, str]:
+    """목차 id → 출처 번호를 지운 본문."""
+    return {str(s.id): strip_citations(s.body or "") for s in sections}
 
 
-def ref_line(n: int, r: dict) -> str:
-    return f"[{n}] {r.get('title') or ''} — {r.get('path') or ''}" + (f" ({r['url']})" if r.get("url") else "")
+def strip_citations(text: str) -> str:
+    return re.sub(r"[ \t]?(\[\d+\])+", "", text or "")
 
 
 # ───────── 마크다운 → docx 블록 ─────────
@@ -137,8 +124,7 @@ def _docx_paragraphs(doc):
 def export_docx(draft: Draft, sections: List[DraftSection], template_bytes: Optional[bytes]) -> bytes:
     from docx import Document as Docx  # type: ignore
 
-    bodies, refs = renumber(sections)
-    refs_md = "\n".join(f"- {ref_line(i, r)}" for i, r in enumerate(refs, start=1))
+    bodies = clean_bodies(sections)
     by_placeholder = {(s.placeholder or s.title): bodies[str(s.id)] for s in sections}
     simple = {"문서명": draft.name, "작성일": date.today().isoformat()}
 
@@ -152,7 +138,10 @@ def export_docx(draft: Draft, sections: List[DraftSection], template_bytes: Opti
             # 문단 전체가 자리 표시 하나면 본문 블록(문단·표·목록)으로 통째로 바꾼다
             if len(names) == 1 and re.fullmatch(r"\s*\{\{\s*[^{}]+?\s*\}\}\s*", text) and names[0] not in simple:
                 name = names[0]
-                md = refs_md if name == "참고자료" else by_placeholder.get(name)
+                if name == "참고자료":  # 출처를 달지 않으므로 자리 표시 문단을 지운다
+                    p._p.getparent().remove(p._p)
+                    continue
+                md = by_placeholder.get(name)
                 if md is None:
                     continue
                 for el in _make_elements(doc, md or "[확인 필요: 생성되지 않음]"):
@@ -180,10 +169,6 @@ def export_docx(draft: Draft, sections: List[DraftSection], template_bytes: Opti
     for s in sections:
         doc.add_heading(s.title, level=1)
         _make_elements(doc, bodies[str(s.id)] or "[확인 필요: 생성되지 않음]")
-    if refs:
-        doc.add_heading("참고 자료", level=1)
-        for i, r in enumerate(refs, start=1):
-            doc.add_paragraph(ref_line(i, r))
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -199,10 +184,10 @@ def export_pptx(draft: Draft, sections: List[DraftSection], template_bytes: byte
     """pptx 템플릿의 {{자리 표시}} 가 든 텍스트 상자를 본문(글자만)으로 채운다. 표는 '열1 | 열2' 줄로 들어간다."""
     from pptx import Presentation  # type: ignore
 
-    bodies, refs = renumber(sections)
+    bodies = clean_bodies(sections)
     by_placeholder = {(s.placeholder or s.title): _plain(bodies[str(s.id)]) for s in sections}
     values = {"문서명": draft.name, "작성일": date.today().isoformat(),
-              "참고자료": "\n".join(ref_line(i, r) for i, r in enumerate(refs, start=1)), **by_placeholder}
+              "참고자료": "", **by_placeholder}
     prs = Presentation(io.BytesIO(template_bytes))
     for slide in prs.slides:
         for shape in slide.shapes:
@@ -234,7 +219,7 @@ def export_pptx(draft: Draft, sections: List[DraftSection], template_bytes: byte
 
 
 # ───────── 양식 없이 새 pptx ─────────
-# 표지 → 작성 개요 → 목차마다 슬라이드(### 소제목마다 한 장, 글머리표가 많으면 나눔 · 표는 따로 한 장) → 참고 자료
+# 표지 → 작성 개요 → 목차마다 슬라이드(### 소제목마다 한 장, 글머리표가 많으면 나눔 · 표는 따로 한 장)
 
 _BULLETS_PER_SLIDE = 8
 
@@ -254,7 +239,7 @@ def export_pptx_new(draft: Draft, sections: List[DraftSection]) -> bytes:
     from pptx import Presentation  # type: ignore
     from pptx.util import Inches, Pt  # type: ignore
 
-    bodies, refs = renumber(sections)
+    bodies = clean_bodies(sections)
     prs = Presentation()
     prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
     title_layout, content_layout, title_only = prs.slide_layouts[0], prs.slide_layouts[1], prs.slide_layouts[5]
@@ -323,8 +308,6 @@ def export_pptx_new(draft: Draft, sections: List[DraftSection]) -> bytes:
         if lines or not emitted:
             emit(title, lines)
 
-    if refs:
-        emit("참고 자료", [ref_line(i, r) for i, r in enumerate(refs, start=1)])
     buf = io.BytesIO()
     prs.save(buf)
     return buf.getvalue()

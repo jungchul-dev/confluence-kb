@@ -282,7 +282,7 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
               )}
             </Box>
           )}
-          <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 1, flexShrink: 0 }}>찾을 내용과 요구사항으로 사내 문서를 찾아 모은 자료입니다. 체크한 자료만 본문 작성에 사용합니다. 다시 모으면 체크하지 않은 자동 후보만 바뀌고, 체크한 자료는 남습니다. 📌 는 반드시 참고 — 자료가 많아 잘릴 때도 가장 먼저 넣습니다.</Typography>
+          <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mb: 1, flexShrink: 0 }}>찾을 내용과 요구사항으로 사내 문서와 올린 참고 문서에서 찾아 모은 자료입니다. 체크한 자료만 본문 작성에 사용합니다. 다시 모으면 체크하지 않은 자동 후보만 바뀌고, 체크한 자료는 남습니다. 📌 는 반드시 참고 — 자료가 많아 잘릴 때도 가장 먼저 넣습니다.</Typography>
           <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
             {collectingHere ? <Working>이 목차의 자료를 모으는 중입니다…</Working>
               : loading ? <Empty><CircularProgress size={18} /></Empty>
@@ -293,7 +293,8 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
                       <Typography noWrap sx={{ fontWeight: 500, fontSize: FONT_SIZES.md, minWidth: 0 }}>{s.title}</Typography>
-                      {s.origin === 'manual' && <Chip size="small" label="직접 추가" sx={{ height: 20, fontSize: FONT_SIZES.xs }} />}
+                      {s.kind === 'reference' && <Tooltip title="올린 참고 문서의 부분입니다 (컨플루언스에 없는 내용)"><Chip size="small" label="참고 문서" sx={{ height: 20, fontSize: FONT_SIZES.xs, backgroundColor: '#eef2ff', color: '#4338ca' }} /></Tooltip>}
+                    {s.origin === 'manual' && <Chip size="small" label="직접 추가" sx={{ height: 20, fontSize: FONT_SIZES.xs }} />}
                       {s.source_state === 'changed' && <Tooltip title="고른 뒤 원문이 수정됐습니다. 다시 모으거나 원문을 확인하세요"><Chip size="small" label="원문 수정됨" sx={{ height: 20, fontSize: FONT_SIZES.xs, backgroundColor: '#fffbeb', color: '#b45309' }} /></Tooltip>}
                       {s.source_state === 'deleted' && <Chip size="small" label="원문 삭제됨" sx={{ height: 20, fontSize: FONT_SIZES.xs, backgroundColor: '#fef2f2', color: '#dc2626' }} />}
                       {s.score != null && <Typography sx={{ ml: 'auto', flexShrink: 0, fontFamily: MONO_FONT, fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{Math.round(s.score * 100)}%</Typography>}
@@ -328,55 +329,64 @@ function SourcesStep({ draft, reload, setDraft, busy, setBusy, setError, space, 
 }
 
 // ───────── 템플릿 · 참고 문서 (선택) — 목차를 만들기 전에 올린다. 목차 제안 때 요구사항과 함께 쓴다 ─────────
-function UploadSlot({ title, desc, accept, fileName, onUpload, onRemove, disabled }) {
+// files: [{ id, name, meta }] · max: 올릴 수 있는 개수 (1 이면 [바꾸기], 여러 개면 목록 + [추가])
+function UploadSlot({ title, desc, accept, files, max, onUpload, onRemove, disabled }) {
   const ref = useRef(null)
+  const single = max === 1
+  const full = files.length >= max
+  const kinds = accept.replaceAll('.', '').replaceAll(',', ' · ')
   return (
-    <Card variant="outlined" sx={{ p: 2, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', backgroundColor: fileName ? '#f8fbff' : 'transparent' }}>
-      <Typography sx={{ fontWeight: 600, mb: 0.5 }}>{title}</Typography>
+    <Card variant="outlined" sx={{ p: 2, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', backgroundColor: files.length ? '#f8fbff' : 'transparent' }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+        <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
+        {!single && <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>{files.length} / {max}</Typography>}
+      </Box>
       <Hint>{desc}</Hint>
       <input ref={ref} type="file" hidden accept={accept} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onUpload(f) }} />
-      <Box sx={{ mt: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-        {fileName ? (
-          <>
-            <Chip icon={<FileIcon />} label={fileName} sx={{ maxWidth: '60%' }} />
-            <Box sx={{ flex: 1 }} />
-            <Button size="small" variant="outlined" startIcon={<UploadIcon />} onClick={() => ref.current?.click()} disabled={disabled}>바꾸기</Button>
-            <Button size="small" variant="outlined" color="error" onClick={onRemove} disabled={disabled}>삭제</Button>
-          </>
-        ) : (
-          <Button variant="contained" size="small" startIcon={<UploadIcon />} onClick={() => ref.current?.click()} disabled={disabled}>파일 올리기 ({accept.replaceAll('.', '').replaceAll(',', ' · ')})</Button>
-        )}
-      </Box>
+      {files.map((f) => (
+        <Box key={f.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, borderTop: 1, borderColor: 'divider' }}>
+          <FileIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+          <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: FONT_SIZES.md }}>{f.name}</Typography>
+          {f.meta && <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', flexShrink: 0 }}>{f.meta}</Typography>}
+          {single && <Button size="small" variant="outlined" startIcon={<UploadIcon />} onClick={() => ref.current?.click()} disabled={disabled}>바꾸기</Button>}
+          <Button size="small" variant="outlined" color="error" onClick={() => onRemove(f.id)} disabled={disabled}>삭제</Button>
+        </Box>
+      ))}
+      {!full && (
+        <Box sx={{ mt: 1 }}>
+          <Button variant={files.length ? 'outlined' : 'contained'} size="small" startIcon={<UploadIcon />} onClick={() => ref.current?.click()} disabled={disabled}>
+            {files.length ? '파일 추가' : '파일 올리기'} ({kinds})
+          </Button>
+        </Box>
+      )}
+      {!single && full && <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', mt: 1 }}>최대 {max}개까지 올릴 수 있습니다. 바꾸려면 하나를 지우세요.</Typography>}
     </Card>
   )
 }
 
-function TemplateStep({ draft, setDraft, busy, setBusy, setError, notify, space }) {
+function TemplateStep({ draft, setDraft, busy, setBusy, setError, notify }) {
   const fmt = draft.doc_format
-  const label = (kind) => (kind === 'form' ? '템플릿' : '참고 문서')
   // 이미 목차가 있으면(뒤로 돌아와 바꾼 경우) 목차에는 바로 반영하지 않으므로 다시 제안받으라고 알린다
   const after = draft.sections.length ? ' 지금 목차에 반영하려면 목차 · 자료 선별에서 [목차 다시 제안받기] 를 누르세요.' : ' 다음 단계에서 목차를 만들 때 함께 참고합니다.'
-
-  const upload = async (kind, file) => {
-    setBusy(`${label(kind)}을 읽는 중…`)
-    try {
-      setDraft(await api.uploadTemplateFile(draft.id, kind, file, space))
-      notify(`${label(kind)}을 올렸습니다.${after}`)
-    } catch (e) { setError(e.message) } finally { setBusy('') }
+  const afterRef = draft.sections.length ? ' 자료 후보에 넣으려면 목차 · 자료 선별에서 [모든 목차 자료 모으기] 를 누르세요.' : ' 다음 단계에서 자료를 모을 때 사내 문서와 함께 찾습니다.'
+  const run = async (msg, fn, done) => {
+    setBusy(msg)
+    try { setDraft(await fn()); notify(done) } catch (e) { setError(e.message) } finally { setBusy('') }
   }
-  const remove = async (kind) => {
-    if (!window.confirm(`${label(kind)}을 지울까요? 지금 목차 · 자료 · 본문은 그대로 둡니다.`)) return
-    try { setDraft(await api.removeTemplateFile(draft.id, kind)); notify(`${label(kind)}을 지웠습니다.`) } catch (e) { setError(e.message) }
-  }
+  const confirmRemove = (what) => window.confirm(`${what}을 지울까요? 지금 목차 · 자료 · 본문은 그대로 둡니다.`)
 
   return (
-    <Box sx={{ display: 'flex', gap: 2, pt: 1 }}>
-      <UploadSlot title="템플릿" accept={`.${fmt}`} fileName={draft.template_form} disabled={!!busy}
-        onUpload={(f) => upload('form', f)} onRemove={() => remove('form')}
-        desc={<>회사에서 쓰는 {fmt} 파일에 본문이 들어갈 자리를 <b>{'{{개요}}'}</b> 처럼 표시해 올리세요. 자리 표시마다 목차가 되고, 내보낼 때 그 자리에 본문이 들어갑니다. <b>{'{{문서명}} {{작성일}} {{참고자료}}'}</b> 는 자동으로 채워집니다.</>} />
-      <UploadSlot title="참고 문서" accept=".docx,.pptx,.pdf,.md,.txt" fileName={draft.template_reference} disabled={!!busy}
-        onUpload={(f) => upload('reference', f)} onRemove={() => remove('reference')}
-        desc="잘 쓴 비슷한 문서를 올리세요. 이 문서의 소제목 구성을 바탕으로 목차를 만들고, 목차마다 이 문서의 구성 · 문체 · 분량을 참고해 씁니다. 내용(사실)은 옮기지 않습니다." />
+    <Box sx={{ display: 'flex', gap: 2, pt: 1, alignItems: 'flex-start' }}>
+      <UploadSlot title="템플릿" accept={`.${fmt}`} max={1} disabled={!!busy}
+        files={draft.template_form ? [{ id: 'form', name: draft.template_form }] : []}
+        onUpload={(f) => run('템플릿을 읽는 중…', () => api.uploadTemplate(draft.id, f), `템플릿을 올렸습니다.${after}`)}
+        onRemove={() => confirmRemove('템플릿') && run('템플릿을 지우는 중…', () => api.removeTemplate(draft.id), '템플릿을 지웠습니다.')}
+        desc={<>회사에서 쓰는 {fmt} 파일에 본문이 들어갈 자리를 <b>{'{{개요}}'}</b> 처럼 표시해 올리세요. 자리 표시마다 목차가 되고, 내보낼 때 그 자리에 본문이 들어갑니다. <b>{'{{문서명}} {{작성일}}'}</b> 은 자동으로 채워집니다.</>} />
+      <UploadSlot title="참고 문서" accept=".docx,.pptx,.pdf,.md,.txt" max={5} disabled={!!busy}
+        files={(draft.references || []).map((r) => ({ id: r.id, name: r.file_name, meta: `${r.chars.toLocaleString()}자` }))}
+        onUpload={(f) => run(`${f.name} 을 읽고 소제목별로 나누는 중…`, () => api.uploadReference(draft.id, f), `참고 문서를 올렸습니다.${afterRef}`)}
+        onRemove={(rid) => window.confirm('참고 문서를 지울까요? 이 문서에서 모은 자료 후보도 함께 지워집니다.') && run('참고 문서를 지우는 중…', () => api.removeReference(draft.id, rid), '참고 문서를 지웠습니다.')}
+        desc="컨플루언스에 없는 내용을 담은 문서를 최대 5개까지 올리세요. 자료를 모을 때 사내 문서와 함께 목차마다 관련 부분을 찾아 후보로 넣고, 체크한 부분은 본문을 쓸 때 내용의 근거로 씁니다." />
     </Box>
   )
 }
@@ -424,15 +434,17 @@ function SectionCard({ draft, s, onGenerate, state, open, onToggle, setDraft, se
         : s.body
           ? (
             <Box sx={{ lineHeight: 1.7, fontSize: FONT_SIZES.lg, '& > :first-of-type': { mt: 0 }, '& table': { borderCollapse: 'collapse', my: 1 }, '& th, & td': { border: 1, borderColor: 'divider', px: 1, py: 0.5, fontSize: FONT_SIZES.md } }}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.body.replace(/\[확인 필요([^\]]*)\]/g, '**⚠ 확인 필요$1**')}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.body.replace(/[ \t]?(\[\d+\])+/g, '').replace(/\[확인 필요([^\]]*)\]/g, '**⚠ 확인 필요$1**')}</ReactMarkdown>
             </Box>
           )
           : <Typography sx={{ color: 'text.disabled', fontSize: FONT_SIZES.md }}>아직 생성하지 않았습니다.</Typography>}
       {s.citations.length > 0 && !editing && !state && (
+        // 작성본에는 출처를 달지 않는다. 검토용으로 이 목차를 쓸 때 넣은 자료만 보여 준다 (내보내기에는 들어가지 않음)
         <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+          <Typography sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary', fontWeight: 600, mb: 0.25 }}>참고한 자료 (검토용 · 내보내기에는 들어가지 않음)</Typography>
           {s.citations.map((c) => (
             <Typography key={c.n} sx={{ fontSize: FONT_SIZES.xs, color: 'text.secondary' }}>
-              [{c.n}] {c.url ? <Link href={c.url} target="_blank" rel="noreferrer">{c.title}</Link> : c.title}{c.heading ? ` · ${c.heading}` : ''}
+              · {c.url ? <Link href={c.url} target="_blank" rel="noreferrer">{c.title}</Link> : c.title}{c.heading ? ` · ${c.heading}` : ''}
             </Typography>
           ))}
         </Box>
@@ -596,7 +608,7 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
   const sub = draft ? [
     FORMAT_LABEL[draft.doc_format],
     draft.requirements.length ? `${draft.requirements.length}건` : '없음',
-    draft.template_id ? draft.template_name : '없음 (선택)',
+    [draft.template_form && '템플릿 1', draft.references?.length && `참고 ${draft.references.length}`].filter(Boolean).join(' · ') || '없음 (선택)',
     draft.sections.length ? `목차 ${draft.sections.length} · 자료 ${selected}` : '',
     draft.sections.length ? `${written} / ${draft.sections.length}` : '',
   ] : []

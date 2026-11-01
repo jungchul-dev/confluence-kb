@@ -96,9 +96,11 @@ export const updateDraftSection = (id, sectionId, body) => request(`/drafts/${id
 export const deleteSection = (id, sectionId) => request(`/drafts/${id}/sections/${sectionId}`, { method: 'DELETE' })
 export const reorderSections = (id, ids) => request(`/drafts/${id}/sections-order`, { method: 'PUT', body: { ids } })
 
-// 템플릿 (선택) — 자료 선별 뒤에 작성 건에 올린다. kind: form(양식 파일) | reference(참고 문서). 올리면 바로 쓴다
-export const uploadTemplateFile = async (id, kind, file, spaceKeys = []) => request(`/drafts/${id}/template/${kind}`, { method: 'POST', body: { file_name: file.name, data_base64: await fileToBase64(file), space_keys: spaceKeys } })
-export const removeTemplateFile = (id, kind) => request(`/drafts/${id}/template/${kind}`, { method: 'DELETE' })
+// 템플릿(1개) · 참고 문서(최대 5개) — 목차를 만들기 전에 올린다. 올리면 저장만 하고 목차 제안 · 생성 때 쓴다
+export const uploadTemplate = async (id, file) => request(`/drafts/${id}/template`, { method: 'POST', body: { file_name: file.name, data_base64: await fileToBase64(file) } })
+export const removeTemplate = (id) => request(`/drafts/${id}/template`, { method: 'DELETE' })
+export const uploadReference = async (id, file) => request(`/drafts/${id}/references`, { method: 'POST', body: { file_name: file.name, data_base64: await fileToBase64(file) } })
+export const removeReference = (id, referenceId) => request(`/drafts/${id}/references/${referenceId}`, { method: 'DELETE' })
 
 export const uploadRequirementFile = async (id, file) => request(`/drafts/${id}/files`, { method: 'POST', body: { file_name: file.name, data_base64: await fileToBase64(file) } })
 export const deleteRequirementFile = (id, fileId) => request(`/drafts/${id}/files/${fileId}`, { method: 'DELETE' })

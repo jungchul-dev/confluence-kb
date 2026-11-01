@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.models import (
-    Document, Draft, DraftFile, DraftRequirement, DraftSection, DraftSource, Template,
+    Document, Draft, DraftFile, DraftReference, DraftRequirement, DraftSection, DraftSource, Template,
 )
 from app.db.session import get_db
 from app.permissions import CurrentUser, get_current_user
@@ -98,7 +98,7 @@ def _draft_out(d: Draft, template: Optional[Template] = None) -> dict:
     return {"id": str(d.id), "name": d.name, "template_id": str(d.template_id) if d.template_id else None,
             "template_name": template.name if template else None, "doc_format": d.doc_format,
             "template_form": template.file_name if template and template.file_bytes else None,
-            "template_reference": template.ref_file_name if template and template.ref_content else None, "overview": d.overview, "owner_id": d.owner_id,
+"overview": d.overview, "owner_id": d.owner_id,
             "created_at": d.created_at.isoformat() if d.created_at else None, "updated_at": d.updated_at.isoformat() if d.updated_at else None}
 
 
@@ -134,8 +134,11 @@ async def _draft_detail(db: AsyncSession, d: Draft) -> dict:
     t = None
     if d.template_id:
         t = (await db.execute(select(Template).where(Template.id == d.template_id))).scalar_one_or_none()
+    refs = (await db.execute(select(DraftReference).where(DraftReference.draft_id == d.id).order_by(DraftReference.uploaded_at))).scalars().all()
     return {
         **_draft_out(d, t),
+        "references": [{"id": str(r.id), "file_name": r.file_name, "chars": len(r.content),
+                        "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None} for r in refs],
         "sections": [_dsection_out(s, counts, req_counts) for s in sections],
         "requirements": [_req_out(r) for r in reqs],
         "files": [{"id": str(f.id), "file_name": f.file_name, "size_bytes": f.size_bytes, "chars": len(f.content),
@@ -235,16 +238,16 @@ async def propose_outline(draft_id: uuid.UUID, payload: OutlineRequest, user: Cu
     if await _sections(db, d) and not payload.replace:
         raise HTTPException(status_code=409, detail="이미 목차가 있습니다.")
     reqs = (await db.execute(select(DraftRequirement).where(DraftRequirement.draft_id == d.id).order_by(DraftRequirement.ordinal))).scalars().all()
-    fixed, reference = None, None
+    fixed = None
     t = (await db.execute(select(Template).where(Template.id == d.template_id))).scalar_one_or_none() if d.template_id else None
     if t and t.file_bytes:
         try:
             fixed = drafting.outline_from_file(t.file_name or f"template.{d.doc_format}", t.file_bytes)
         except Exception as e:  # noqa: BLE001
             logger.warning("template outline failed, ignoring template: %s", e)
-    if t and t.ref_content:
-        reference = drafting.outline_from_reference(t.ref_content) or None
-    items = await drafting.propose_outline(d, list(reqs), fixed=fixed, reference=reference)
+    refs = (await db.execute(select(DraftReference).where(DraftReference.draft_id == d.id).order_by(DraftReference.uploaded_at))).scalars().all()
+    references = [(r.file_name, items_) for r in refs if (items_ := drafting.outline_from_reference(r.content))]
+    items = await drafting.propose_outline(d, list(reqs), fixed=fixed, references=references or None)
     try:
         await drafting.replace_outline(db, d, items)
     except Exception as e:  # noqa: BLE001
@@ -425,8 +428,9 @@ def _source_out(s: DraftSource, current_hash: Optional[str], doc_exists: bool) -
         "document_id": str(s.document_id) if s.document_id else None, "title": s.doc_title, "path": s.doc_path, "url": s.doc_url,
         "heading": s.heading, "chunk_ordinal": s.chunk_ordinal, "content": s.content, "score": s.score,
         "selected": s.selected, "pinned": s.pinned, "created_at": s.created_at.isoformat() if s.created_at else None,
-        # 원문 상태: ok | changed(고른 뒤 원문이 수정됨) | deleted(원문 삭제됨)
-        "source_state": "deleted" if not doc_exists else ("changed" if s.content_hash and current_hash and s.content_hash != current_hash else "ok"),
+        "kind": "reference" if s.reference_part_id else "confluence",  # reference = 올린 참고 문서의 부분
+        # 원문 상태: ok | changed(고른 뒤 원문이 수정됨) | deleted(원문 삭제됨). 참고 문서는 원문이 컨플루언스에 없으므로 늘 ok
+        "source_state": "ok" if s.reference_part_id else "deleted" if not doc_exists else ("changed" if s.content_hash and current_hash and s.content_hash != current_hash else "ok"),
     }
 
 
@@ -507,11 +511,11 @@ async def add_source(draft_id: uuid.UUID, section_id: uuid.UUID, payload: Source
 
 
 # ───────── 템플릿 · 참고 문서 (선택) ─────────
-# 요구사항 다음, 목차를 만들기 전에 작성 건마다 올린다 (작성 건당 templates 1행). 올리면 저장만 하고, 목차 제안(/outline) 때 쓴다.
-# - 템플릿(docx · pptx, 문서 형식과 같아야 함): {{자리 표시}} 가 목차 제목이 되고, 내보낼 때 이 파일에 채운다
-# - 참고 문서(pdf · docx · pptx · md · txt): 소제목을 목차 제안의 바탕으로, 생성 때 목차별 형식 예시로 쓴다
+# 요구사항 다음, 목차를 만들기 전에 올린다. 올리면 저장만 하고, 목차 제안(/outline) · 생성 때 쓴다.
+# - 템플릿(작성 건당 1개, templates 1행, docx · pptx · 문서 형식과 같아야 함): {{자리 표시}} 가 목차 제목이 되고, 내보낼 때 이 파일에 채운다
+# - 참고 문서(작성 건당 최대 5개, draft_references): 컨플루언스에 없는 내용. 소제목별 부분이 자료 모으기 때 사내 문서와 함께 후보가 된다
 
-class TemplateUpload(BaseModel):
+class FileIn(BaseModel):
     file_name: str = Field(..., min_length=1, max_length=300)
     data_base64: str
 
@@ -522,31 +526,15 @@ async def _drop_template_if_unused(db: AsyncSession, template_id) -> None:
         await db.execute(delete(Template).where(Template.id == template_id))
 
 
-async def _draft_template(db: AsyncSession, d: Draft, user: CurrentUser) -> Template:
-    t = (await db.execute(select(Template).where(Template.id == d.template_id))).scalar_one_or_none() if d.template_id else None
-    if t is None:
-        t = Template(name="", source_kind="reference", created_by=user.id)
-        db.add(t)
-        await db.flush()
-        d.template_id = t.id
-    return t
-
-
-def _refresh_template_meta(t: Template) -> None:
-    t.source_kind = "form" if t.file_bytes else "reference"
-    t.name = " · ".join(x for x in (t.file_name if t.file_bytes else None, t.ref_file_name) if x) or "템플릿"
-    t.updated_at = _now()
-
-
-async def _finish(db: AsyncSession, d: Draft, result: dict) -> dict:
+async def _finish(db: AsyncSession, d: Draft, result: Optional[dict] = None) -> dict:
     d.updated_at = _now()
     await db.commit()
-    return {**(await _draft_detail(db, d)), **result}
+    return {**(await _draft_detail(db, d)), **(result or {})}
 
 
-@router.post("/drafts/{draft_id}/template/form")
-async def upload_form(draft_id: uuid.UUID, payload: TemplateUpload, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """템플릿 — 자리 표시(없으면 docx 제목 스타일)가 목차 제목이 된다. 목차는 /outline 에서 만든다."""
+@router.post("/drafts/{draft_id}/template")
+async def upload_template(draft_id: uuid.UUID, payload: FileIn, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """템플릿 — 자리 표시(없으면 docx 제목 스타일)가 목차 제목이 된다. 다시 올리면 바꾼다. 목차는 /outline 에서 만든다."""
     d = await _get_draft(db, draft_id, user)
     ext = payload.file_name.rsplit(".", 1)[-1].lower() if "." in payload.file_name else ""
     if ext != d.doc_format:
@@ -559,17 +547,36 @@ async def upload_form(draft_id: uuid.UUID, payload: TemplateUpload, user: Curren
     except Exception as e:  # noqa: BLE001
         logger.warning("template parse failed: %s", e, exc_info=True)
         raise HTTPException(status_code=400, detail=f"템플릿 파일을 읽지 못했습니다: {e}")
-    t = await _draft_template(db, d, user)
-    t.file_name, t.file_bytes = payload.file_name, data
+    t = (await db.execute(select(Template).where(Template.id == d.template_id))).scalar_one_or_none() if d.template_id else None
+    if t is None:
+        t = Template(name=payload.file_name, source_kind="form", created_by=user.id)
+        db.add(t)
+        await db.flush()
+        d.template_id = t.id
+    t.name, t.file_name, t.file_bytes, t.updated_at = payload.file_name, payload.file_name, data, _now()
     t.description = f"자리 표시 {sum(1 for i in items if i.placeholder)}개" if any(i.placeholder for i in items) else "제목 스타일에서 목차 추출"
-    _refresh_template_meta(t)
     return await _finish(db, d, {"outline_items": len(items)})
 
 
-@router.post("/drafts/{draft_id}/template/reference")
-async def upload_reference(draft_id: uuid.UUID, payload: TemplateUpload, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """참고 문서 — 소제목을 목차 제안의 바탕으로, 생성 때 목차별 형식 예시로 쓴다."""
+@router.delete("/drafts/{draft_id}/template")
+async def remove_template(draft_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """템플릿을 지운다. 목차 · 자료 · 본문은 그대로 두고, 내보낼 때 새 파일로 만든다."""
     d = await _get_draft(db, draft_id, user)
+    tid = d.template_id
+    d.template_id = None
+    await db.flush()
+    if tid:
+        await _drop_template_if_unused(db, tid)
+    return await _finish(db, d)
+
+
+@router.post("/drafts/{draft_id}/references")
+async def upload_reference(draft_id: uuid.UUID, payload: FileIn, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """참고 문서 추가 (최대 5개). 소제목 단위로 나눠 임베딩까지 저장해 둔다(문서가 길면 조금 걸린다). 다음 자료 모으기부터 후보에 들어간다."""
+    d = await _get_draft(db, draft_id, user)
+    n = (await db.execute(select(func.count()).select_from(DraftReference).where(DraftReference.draft_id == d.id))).scalar()
+    if n >= drafting.MAX_REFERENCES:
+        raise HTTPException(status_code=400, detail=f"참고 문서는 {drafting.MAX_REFERENCES}개까지 올릴 수 있습니다. 하나를 지운 뒤 올리세요.")
     data = _decode(payload.data_base64)
     try:
         text = drafting.parse_upload(payload.file_name, data)
@@ -580,31 +587,19 @@ async def upload_reference(draft_id: uuid.UUID, payload: TemplateUpload, user: C
         raise HTTPException(status_code=400, detail=f"참고 문서를 읽지 못했습니다: {e}")
     if not text.strip():
         raise HTTPException(status_code=400, detail="참고 문서에서 글자를 찾지 못했습니다 (스캔 PDF 라면 OCR 이 필요합니다).")
-    t = await _draft_template(db, d, user)
-    t.ref_file_name, t.ref_content = payload.file_name, text
-    _refresh_template_meta(t)
-    return await _finish(db, d, {"outline_items": len(drafting.outline_from_reference(text))})
+    ref = DraftReference(draft_id=d.id, file_name=payload.file_name, content=text)
+    db.add(ref)
+    await db.flush()
+    parts = await drafting.build_reference_parts(db, ref)
+    return await _finish(db, d, {"reference_parts": parts, "outline_items": len(drafting.outline_from_reference(text))})
 
 
-@router.delete("/drafts/{draft_id}/template/{kind}")
-async def remove_template_file(draft_id: uuid.UUID, kind: str, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """템플릿(form) 또는 참고 문서(reference) 를 지운다. 목차 · 자료 · 본문은 그대로 둔다."""
-    if kind not in ("form", "reference"):
-        raise HTTPException(status_code=404, detail="form 또는 reference 만 지울 수 있습니다.")
+@router.delete("/drafts/{draft_id}/references/{reference_id}")
+async def remove_reference(draft_id: uuid.UUID, reference_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """참고 문서를 지운다. 부분 · 임베딩과 거기서 온 자료 후보도 함께 지워진다(CASCADE). 목차 · 본문은 그대로 둔다."""
     d = await _get_draft(db, draft_id, user)
-    if d.template_id:
-        t = await _draft_template(db, d, user)
-        if kind == "form":
-            t.file_name, t.file_bytes = None, None
-        else:
-            t.ref_file_name, t.ref_content = None, None
-        if not t.file_bytes and not t.ref_content:
-            d.template_id = None
-            await db.flush()
-            await _drop_template_if_unused(db, t.id)
-        else:
-            _refresh_template_meta(t)
-    return await _finish(db, d, {})
+    await db.execute(delete(DraftReference).where(DraftReference.id == reference_id, DraftReference.draft_id == d.id))
+    return await _finish(db, d)
 
 
 # ───────── 생성 · 내보내기 ─────────

@@ -6,7 +6,9 @@ sync_state : 페이지별 마지막 동기화 버전
 queries    : 질의 로그 (사용 청크·점수·응답 여부)
 
 자료 작성(요구사항 → 목차 · 선별 → (선택) 템플릿 → 생성) — 위 검색 테이블과 분리해 둔다
-templates          : 작성 건에 붙인 템플릿 (양식 파일 · 참고 문서). 미리 등록하지 않고 작성 중에 올린다
+templates          : 작성 건에 붙인 템플릿 (양식 파일 1개). 미리 등록하지 않고 작성 중에 올린다
+draft_references   : 작성 건에 올린 참고 문서 (컨플루언스에 없는 내용, 최대 5개, 파싱 본문)
+draft_reference_parts : 참고 문서의 소제목별 부분 + 임베딩 (올릴 때 한 번 계산, 자료 모으기 때 사내 문서와 함께 후보로 찾는다)
 template_sections  : 템플릿에서 뽑은 목차 (기록용 — 작성 건 목차는 draft_sections)
 drafts             : 작성 건 (이름 · 작성 개요 · 붙인 템플릿)
 draft_sections     : 작성 건의 목차 (제안 목차 또는 템플릿 목차) + 생성 결과
@@ -153,21 +155,17 @@ class QueryLog(Base):
 
 
 class Template(Base):
-    """작성 건에 붙인 템플릿 (작성 건당 1개). 양식 파일과 참고 문서 중 하나 또는 둘 다 가진다."""
+    """작성 건에 붙인 템플릿 (작성 건당 1개, 양식 파일). 참고 문서는 draft_references 에 따로 둔다."""
 
     __tablename__ = "templates"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(Text, nullable=False)  # 화면 표시용 (올린 파일 이름)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    source_kind: Mapped[str] = mapped_column(String(16), nullable=False)  # form(양식 있음) | reference(참고 문서만)
+    source_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="form")  # form
     # 양식 파일: {{자리 표시}} 가 들어간 docx · pptx 원본. 목차가 되고, 내보낼 때 이 파일에 본문을 채운다
     file_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     file_bytes: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
-    # 참고 문서: 잘 쓴 문서 파일의 파싱 본문("## 소제목" 단위). 양식이 없으면 소제목이 목차가 되고,
-    # 생성할 때 목차와 가장 가까운 부분을 형식 · 문체 · 분량 예시로 넣는다 (사실 근거로는 쓰지 않는다)
-    ref_file_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ref_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
@@ -291,6 +289,10 @@ class DraftSource(Base):
     draft_file_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("draft_files.id", ondelete="CASCADE"), nullable=True
     )  # origin=requirement 일 때
+    # 참고 문서(컨플루언스에 없는 내용)의 부분에서 온 자료. 참고 문서를 지우면 자료도 함께 지워진다
+    reference_part_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("draft_reference_parts.id", ondelete="CASCADE"), nullable=True
+    )
     doc_title: Mapped[str] = mapped_column(Text, nullable=False, default="")
     doc_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
     doc_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -307,3 +309,37 @@ class DraftSource(Base):
         Index("idx_draft_sources_section", "section_id", "selected"),
         Index("idx_draft_sources_document", "document_id"),
     )
+
+
+class DraftReference(Base):
+    """작성 건에 올린 참고 문서 (컨플루언스에 없는 내용을 담은 문서, 작성 건당 최대 5개). 원본은 버리고 파싱 본문만 둔다.
+    소제목 단위 부분(draft_reference_parts)이 자료 모으기 때 사내 문서 조각과 함께 후보가 되고, 체크하면 본문의 근거(출처 [n])로 쓴다.
+    양식(형식)은 템플릿이 맡는다."""
+
+    __tablename__ = "draft_references"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False)
+    file_name: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")  # "## 소제목" 이 붙은 파싱 본문
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    __table_args__ = (Index("idx_draft_references_draft", "draft_id", "uploaded_at"),)
+
+
+class DraftReferencePart(Base):
+    """참고 문서의 소제목 단위 부분 = 자료 후보 1건. 임베딩을 올릴 때 한 번만 계산해 두고, 자료 모으기 때 저장된 벡터로 가까운 부분을 찾는다
+    (로컬 임베딩 서버는 여러 글을 한꺼번에 보내면 매우 느리므로 모을 때마다 계산하지 않는다)."""
+
+    __tablename__ = "draft_reference_parts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    reference_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("draft_references.id", ondelete="CASCADE"), nullable=False
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    heading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)  # 소제목 줄 포함, 최대 1,500자
+    embedding = mapped_column(Vector(settings.embedding_dim), nullable=True)
+
+    __table_args__ = (Index("idx_draft_reference_parts_ref", "reference_id", "ordinal"),)
