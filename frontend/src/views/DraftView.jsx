@@ -27,7 +27,7 @@ export default function DraftView({ space }) {
         </Box>
         <Button variant="contained" onClick={() => setDialog({ id: null })}>새 자료 작성</Button>
       </Card>
-      <Snackbar open={!!error} autoHideDuration={8000} onClose={() => setError('')} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+      <Snackbar open={!!error} autoHideDuration={8000} onClose={() => setError('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         {error ? <Alert severity="error" variant="filled" onClose={() => setError('')}>{error}</Alert> : <span />}
       </Snackbar>
 

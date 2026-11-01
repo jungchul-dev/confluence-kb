@@ -671,12 +671,12 @@ export default function DraftDialog({ open, draftId, space, onClose, onChanged }
         </Box>
       </DialogActions>
 
-      {/* 진행 중 (끝날 때까지) · 결과 / 오류 (잠시 뒤 사라짐) */}
-      <Snackbar open={!!busy} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+      {/* 진행 중 (끝날 때까지) · 결과 / 오류 (잠시 뒤 사라짐) — 둘 다 아래 가운데. 다이얼로그 아래쪽 이전 · 다음 버튼을 가리지 않게 그 위에 띄우고, 겹치면 결과를 진행 중 위로 올린다 */}
+      <Snackbar open={!!busy} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} sx={{ bottom: '100px !important' }}>
         <Alert severity="info" variant="filled" icon={<CircularProgress size={16} color="inherit" />} sx={{ boxShadow: 3 }}>{busy}</Alert>
       </Snackbar>
       <Snackbar open={!!toast} autoHideDuration={toast?.severity === 'error' ? 8000 : 4000} onClose={(_, reason) => reason !== 'clickaway' && setToast(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} sx={{ bottom: busy ? '164px !important' : '100px !important' }}>
         {toast ? <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)} sx={{ boxShadow: 3, maxWidth: 640 }}>{toast.msg}</Alert> : <span />}
       </Snackbar>
     </Dialog>

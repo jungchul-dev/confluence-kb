@@ -196,6 +196,46 @@ const CLUSTER_EXTRAS=[
      <text x="205" y="400" font-size="17" font-weight="700" fill="${TINT.violet}" text-anchor="end">MES 제안 · 견적</text>`},
 ];
 
+
+/* ───────── 자료 작성 장표의 '넣은 것 → 쓰이는 곳' 표 ───────── */
+const UM={x:30,lw:300,cw:260,top:172,hh:46,rh:72};
+const UM_COLS=[['목차 짜기','green'],['자료 모으기','green'],['본문 쓰기','rose'],['점검 · 내보내기','rose']];
+const UM_ROWS=[
+  ['수집된 사내 문서','컨플루언스 문서 조각','neutral',['','후보를 찾는 곳','체크한 조각 = 근거','']],
+  ['작성 개요','기본 정보','neutral',['주제 · 범위','검색어에 덧붙임','목적 · 대상에 맞춤','']],
+  ['요구사항','요청서 파일 · 직접 입력','blue',['빠짐없이 목차에','목차에 붙여 검색어로','모두 다루게 함','반영됐는지 ✅ ❌']],
+  ['템플릿','양식 파일','violet',['자리 표시 = 목차 제목','','','이 양식에 채움']],
+  ['참고 문서','첨부 파일 (최대 5개)','violet',['다룰 주제 힌트','없는 내용도 후보로','체크한 부분 = 근거','']],
+  ['찾을 내용 · 작성 지침','목차마다 사람이 다듬음','amber',['','찾을 내용 = 검색어','작성 지침 = 형식 · 분량','']],
+];
+const USE_MATRIX=(()=>{
+  const {x,lw,cw,top,hh,rh}=UM, cx=i=>x+lw+i*cw, y0=top+hh*2+6, out=[];
+  // 단계 머리: ④ 는 앞 두 칸, ⑤ 는 뒤 두 칸
+  let h=`<text x="${x}" y="${top+hh+30}" font-size="16" font-weight="700" fill="#71717a">넣은 것  →  쓰이는 곳</text>`;
+  [['④ 목차 · 자료 선별','green',0],['⑤ 작성 · 검토','rose',2]].forEach(([t,c,i])=>{
+    h+=`<rect x="${cx(i)+6}" y="${top}" width="${cw*2-12}" height="${hh-8}" rx="10" fill="${SOFT[c]}" stroke="${EDGE_SOFT[c]}" stroke-width="1.5"/>
+      <text x="${cx(i)+cw}" y="${top+26}" font-size="18" font-weight="700" fill="${TINT[c]}" text-anchor="middle">${t}</text>`;
+  });
+  UM_COLS.forEach(([t,c],i)=>{h+=`<text x="${cx(i)+cw/2}" y="${top+hh+30}" font-size="17" font-weight="700" fill="#18181b" text-anchor="middle">${t}</text>`});
+  h+=`<line x1="${x}" y1="${y0-4}" x2="${cx(4)}" y2="${y0-4}" stroke="#d4d4d8" stroke-width="1.5"/>`;
+  out.push({t:1.6,svg:h});
+  UM_ROWS.forEach(([name,sub,c,cells],k)=>{
+    const y=y0+k*rh;
+    let g=`${k?`<line x1="${x}" y1="${y}" x2="${cx(4)}" y2="${y}" stroke="#f0f0f2" stroke-width="1.5"/>`:''}
+      <circle cx="${x+10}" cy="${y+rh/2-8}" r="6" fill="${TINT[c]}"/>
+      <text x="${x+26}" y="${y+rh/2-2}" font-size="19" font-weight="700" fill="#18181b">${esc(name)}</text>
+      <text x="${x+26}" y="${y+rh/2+20}" font-size="14" font-weight="500" fill="#a1a1aa">${esc(sub)}</text>`;
+    cells.forEach((t,i)=>{
+      const mx=cx(i)+cw/2, my=y+rh/2;
+      g+=t?`<rect x="${cx(i)+10}" y="${y+12}" width="${cw-20}" height="${rh-24}" rx="10" fill="${SOFT[UM_COLS[i][1]]}" stroke="${EDGE_SOFT[UM_COLS[i][1]]}" stroke-width="1.2"/>
+             <text x="${mx}" y="${my+6}" font-size="17" font-weight="600" fill="#27272a" text-anchor="middle">${esc(t)}</text>`
+          :`<text x="${mx}" y="${my+6}" font-size="17" fill="#d4d4d8" text-anchor="middle">—</text>`;
+    });
+    out.push({t:2.0+k*.5,svg:g});
+  });
+  return out;
+})();
+
 const Q='장애 나면 누구한테 에스컬레이션해?';
 
 const AGENDA=[
@@ -207,6 +247,7 @@ const AGENDA=[
   ['06','다시 고르기','리랭킹'],
   ['07','답하기','답변 생성'],
   ['08','주제별로 묶기','클러스터링'],
+  ['09','자료 작성','문서 초안 만들기'],
 ];
 
 const SLIDES=[
@@ -398,6 +439,22 @@ const SLIDES=[
    {from:'s3',to:'k2',fromSide:'r',toSide:'l',via:[[975,395],[975,249]],t:4.4,color:'violet',noPacket:true},
    {from:'s3',to:'k3',fromSide:'r',toSide:'l',toPos:.55,t:4.4,color:'violet'},
  ],extras:CLUSTER_EXTRAS}},
+
+/* 9 자료 작성 */
+{num:'09',crumb:'자료 작성',title:'자료 작성',tech:'문서 초안 만들기',
+ easy:'요구사항과 양식을 주면 <b>목차를 짜고</b>, 목차마다 <b>사내 문서에서 자료를 찾아</b> 초안을 씁니다. 사람은 <b>자료를 고르고 검토</b>만 하면 됩니다.',
+ koTitle:'사람이 하는 일',
+ ko:['요구사항 파일 · 템플릿 · 참고 문서 <b>올리기</b>','목차를 다듬고 자료를 <b>체크로 고르기</b>','초안을 읽고 <b>빠진 요구사항 · 확인 필요</b> 고치기'],
+ notes:'표의 줄은 넣는 것, 칸은 그것이 쓰이는 곳입니다. 수집해 둔 컨플루언스 문서와 올린 참고 문서는 자료 후보가 되고, 사람이 체크한 것만 본문의 근거가 됩니다. 요구사항은 목차를 짤 때, 자료를 찾을 때, 본문을 쓸 때, 다 쓴 뒤 점검할 때까지 네 군데에 모두 쓰입니다. 템플릿은 목차 제목과 내보낼 양식을 정합니다.',
+ diagram:{nodes:[
+   {id:'s1',x:30,y:20,w:248,h:120,title:'① 기본 정보',fs:21,sub:'이름 · 형식 · 개요',color:'neutral',t:0},
+   {id:'s2',x:303,y:20,w:248,h:120,title:'② 요구사항',fs:21,sub:'요청서에서 항목 뽑기',color:'blue',t:.3},
+   {id:'s3',x:576,y:20,w:248,h:120,title:'③ 템플릿 · 참고 문서',fs:20,sub:'양식 · 추가 자료 올리기',color:'violet',t:.6},
+   {id:'s4',x:849,y:20,w:248,h:120,title:'④ 목차 · 자료 선별',fs:20,sub:'목차 짜고 자료 고르기',color:'green',t:.9},
+   {id:'s5',x:1122,y:20,w:248,h:120,title:'⑤ 작성 · 검토',fs:21,sub:'초안 → docx · pptx',color:'rose',t:1.2},
+ ],edges:[
+   {from:'s1',to:'s2',t:.2,noPacket:true},{from:'s2',to:'s3',t:.5,noPacket:true},{from:'s3',to:'s4',t:.8,noPacket:true},{from:'s4',to:'s5',t:1.1,noPacket:true},
+ ],extras:USE_MATRIX}},
 ];
 
 /* ───────── 렌더 ───────── */
@@ -422,7 +479,7 @@ function rFlow(s,i){
       <div class="diagram"><div class="svgwrap"></div></div>
       <div class="side">
         <div class="card easy" style="animation-delay:.2s"><h4>쉽게 말하면</h4><p>${s.easy}</p></div>
-        <div class="card ko" style="animation-delay:.4s"><h4>한글은 이렇게</h4><ul>${s.ko.map(p=>`<li>${p}</li>`).join('')}</ul></div>
+        <div class="card ko" style="animation-delay:.4s"><h4>${s.koTitle||'한글은 이렇게'}</h4><ul>${s.ko.map(p=>`<li>${p}</li>`).join('')}</ul></div>
       </div>
     </div></div>`;
 }
