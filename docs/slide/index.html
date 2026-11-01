@@ -197,45 +197,6 @@ const CLUSTER_EXTRAS=[
 ];
 
 
-/* ───────── 자료 작성 장표의 '넣은 것 → 쓰이는 곳' 표 ───────── */
-const UM={x:30,lw:300,cw:260,top:172,hh:46,rh:72};
-const UM_COLS=[['목차 짜기','green'],['자료 모으기','green'],['본문 쓰기','rose'],['점검 · 내보내기','rose']];
-const UM_ROWS=[
-  ['수집된 사내 문서','컨플루언스 문서 조각','neutral',['','후보를 찾는 곳','체크한 조각 = 근거','']],
-  ['작성 개요','기본 정보','neutral',['주제 · 범위','검색어에 덧붙임','목적 · 대상에 맞춤','']],
-  ['요구사항','요청서 파일 · 직접 입력','blue',['빠짐없이 목차에','목차에 붙여 검색어로','모두 다루게 함','반영됐는지 ✅ ❌']],
-  ['템플릿','양식 파일','violet',['자리 표시 = 목차 제목','','','이 양식에 채움']],
-  ['참고 문서','첨부 파일 (최대 5개)','violet',['다룰 주제 힌트','없는 내용도 후보로','체크한 부분 = 근거','']],
-  ['찾을 내용 · 작성 지침','목차마다 사람이 다듬음','amber',['','찾을 내용 = 검색어','작성 지침 = 형식 · 분량','']],
-];
-const USE_MATRIX=(()=>{
-  const {x,lw,cw,top,hh,rh}=UM, cx=i=>x+lw+i*cw, y0=top+hh*2+6, out=[];
-  // 단계 머리: ④ 는 앞 두 칸, ⑤ 는 뒤 두 칸
-  let h=`<text x="${x}" y="${top+hh+30}" font-size="16" font-weight="700" fill="#71717a">넣은 것  →  쓰이는 곳</text>`;
-  [['④ 목차 · 자료 선별','green',0],['⑤ 작성 · 검토','rose',2]].forEach(([t,c,i])=>{
-    h+=`<rect x="${cx(i)+6}" y="${top}" width="${cw*2-12}" height="${hh-8}" rx="10" fill="${SOFT[c]}" stroke="${EDGE_SOFT[c]}" stroke-width="1.5"/>
-      <text x="${cx(i)+cw}" y="${top+26}" font-size="18" font-weight="700" fill="${TINT[c]}" text-anchor="middle">${t}</text>`;
-  });
-  UM_COLS.forEach(([t,c],i)=>{h+=`<text x="${cx(i)+cw/2}" y="${top+hh+30}" font-size="17" font-weight="700" fill="#18181b" text-anchor="middle">${t}</text>`});
-  h+=`<line x1="${x}" y1="${y0-4}" x2="${cx(4)}" y2="${y0-4}" stroke="#d4d4d8" stroke-width="1.5"/>`;
-  out.push({t:1.6,svg:h});
-  UM_ROWS.forEach(([name,sub,c,cells],k)=>{
-    const y=y0+k*rh;
-    let g=`${k?`<line x1="${x}" y1="${y}" x2="${cx(4)}" y2="${y}" stroke="#f0f0f2" stroke-width="1.5"/>`:''}
-      <circle cx="${x+10}" cy="${y+rh/2-8}" r="6" fill="${TINT[c]}"/>
-      <text x="${x+26}" y="${y+rh/2-2}" font-size="19" font-weight="700" fill="#18181b">${esc(name)}</text>
-      <text x="${x+26}" y="${y+rh/2+20}" font-size="14" font-weight="500" fill="#a1a1aa">${esc(sub)}</text>`;
-    cells.forEach((t,i)=>{
-      const mx=cx(i)+cw/2, my=y+rh/2;
-      g+=t?`<rect x="${cx(i)+10}" y="${y+12}" width="${cw-20}" height="${rh-24}" rx="10" fill="${SOFT[UM_COLS[i][1]]}" stroke="${EDGE_SOFT[UM_COLS[i][1]]}" stroke-width="1.2"/>
-             <text x="${mx}" y="${my+6}" font-size="17" font-weight="600" fill="#27272a" text-anchor="middle">${esc(t)}</text>`
-          :`<text x="${mx}" y="${my+6}" font-size="17" fill="#d4d4d8" text-anchor="middle">—</text>`;
-    });
-    out.push({t:2.0+k*.5,svg:g});
-  });
-  return out;
-})();
-
 const Q='장애 나면 누구한테 에스컬레이션해?';
 
 const AGENDA=[
@@ -247,7 +208,7 @@ const AGENDA=[
   ['06','다시 고르기','리랭킹'],
   ['07','답하기','답변 생성'],
   ['08','주제별로 묶기','클러스터링'],
-  ['09','자료 작성','문서 초안 만들기'],
+  ['09','자료 작성','목차 생성 · 초안 작성'],
 ];
 
 const SLIDES=[
@@ -441,20 +402,38 @@ const SLIDES=[
  ],extras:CLUSTER_EXTRAS}},
 
 /* 9 자료 작성 */
-{num:'09',crumb:'자료 작성',title:'자료 작성',tech:'문서 초안 만들기',
- easy:'요구사항과 양식을 주면 <b>목차를 짜고</b>, 목차마다 <b>사내 문서에서 자료를 찾아</b> 초안을 씁니다. 사람은 <b>자료를 고르고 검토</b>만 하면 됩니다.',
- koTitle:'사람이 하는 일',
- ko:['요구사항 파일 · 템플릿 · 참고 문서 <b>올리기</b>','목차를 다듬고 자료를 <b>체크로 고르기</b>','초안을 읽고 <b>빠진 요구사항 · 확인 필요</b> 고치기'],
- notes:'표의 줄은 넣는 것, 칸은 그것이 쓰이는 곳입니다. 수집해 둔 컨플루언스 문서와 올린 참고 문서는 자료 후보가 되고, 사람이 체크한 것만 본문의 근거가 됩니다. 요구사항은 목차를 짤 때, 자료를 찾을 때, 본문을 쓸 때, 다 쓴 뒤 점검할 때까지 네 군데에 모두 쓰입니다. 템플릿은 목차 제목과 내보낼 양식을 정합니다.',
- diagram:{nodes:[
-   {id:'s1',x:30,y:20,w:248,h:120,title:'① 기본 정보',fs:21,sub:'이름 · 형식 · 개요',color:'neutral',t:0},
-   {id:'s2',x:303,y:20,w:248,h:120,title:'② 요구사항',fs:21,sub:'요청서에서 항목 뽑기',color:'blue',t:.3},
-   {id:'s3',x:576,y:20,w:248,h:120,title:'③ 템플릿 · 참고 문서',fs:20,sub:'양식 · 추가 자료 올리기',color:'violet',t:.6},
-   {id:'s4',x:849,y:20,w:248,h:120,title:'④ 목차 · 자료 선별',fs:20,sub:'목차 짜고 자료 고르기',color:'green',t:.9},
-   {id:'s5',x:1122,y:20,w:248,h:120,title:'⑤ 작성 · 검토',fs:21,sub:'초안 → docx · pptx',color:'rose',t:1.2},
+{num:'09',crumb:'자료 작성',title:'자료 작성',tech:'목차 생성 · 자료 선별 · 초안 작성',
+ easy:'요구사항 · 템플릿 · 참고 문서를 넣으면 AI 가 <b>목차를 생성</b>하고, 목차마다 <b>질문할 때와 같은 방법으로 자료를 찾아</b> 초안을 씁니다. 사람은 <b>자료를 고르고 검토</b>합니다.',
+ koTitle:'앞 장표와 같은 기술',
+ ko:['요구사항 · 참고 문서도 <b>숫자로 바꿔</b> 비교합니다 (03)','자료 찾기는 <b>찾기 → 다시 고르기</b>를 그대로 씁니다 (05 · 06)','본문도 <b>고른 글만 보고</b> 쓰고, 근거가 없으면 지어내지 않습니다 (07)'],
+ notes:'첫째 줄은 목차 생성입니다. 요구사항 파일은 AI 가 항목을 뽑고, 템플릿은 자리 표시를, 참고 문서는 소제목을 읽어 AI 가 목차를 만듭니다. 목차마다 제목 · 찾을 내용 · 작성 지침이 생기고, 요구사항은 숫자로 바꿔 가장 가까운 목차에 붙습니다. 둘째 줄은 자료 선별입니다. 찾을 내용과 요구사항으로 검색어를 만들어 사내 문서는 질문할 때와 같은 방식으로, 참고 문서는 올릴 때 미리 바꿔 둔 숫자로 찾습니다. 셋째 줄은 작성 · 검토입니다. 체크한 자료와 작성 지침 · 요구사항을 AI 에게 주어 목차별로 쓰고, 다 쓰면 요구사항이 들어갔는지 AI 가 다시 확인합니다.',
+ diagram:{groups:[
+   {id:'g1',x:15,y:10,w:1350,h:228,label:'목차 생성',color:'green',t:0},
+   {id:'g2',x:15,y:252,w:1350,h:228,label:'자료 선별',color:'blue',t:2.2},
+   {id:'g3',x:15,y:494,w:1350,h:228,label:'작성 · 검토',color:'rose',t:4.4},
+ ],nodes:[
+   {id:'a1',x:40,y:68,w:330,h:142,kind:'text',fs:16,lh:28,color:'neutral',t:.2,lines:['작성 개요','요구사항 파일 → AI 가 [[항목 뽑기]]','템플릿 → [[{{자리 표시}}]] 읽기','참고 문서 → [[소제목]] 읽기']},
+   {id:'a2',x:420,y:68,w:230,h:142,title:'AI 목차 생성',fs:21,sub:'템플릿이 있으면\n자리 표시 = 목차 제목',color:'green',t:.8},
+   {id:'a3',x:700,y:58,w:300,h:162,kind:'text',title:'목차마다',fs:16,lh:29,color:'green',tone:true,t:1.3,lines:['제목','[[찾을 내용]] — 검색어','[[작성 지침]] — 쓰는 방법']},
+   {id:'a4',x:1050,y:68,w:290,h:142,title:'요구사항 붙이기',fs:21,sub:'숫자로 바꿔\n가장 가까운 목차에',color:'green',t:1.8},
+
+   {id:'b1',x:40,y:316,w:330,h:130,kind:'text',fs:16,lh:30,color:'blue',t:2.4,lines:['[[찾을 내용]]','+ 붙은 요구사항 앞 3개','+ 작성 개요 앞부분']},
+   {id:'b2',x:420,y:296,w:580,h:78,title:'사내 문서에서 찾기',fs:19,sub:'뜻 + 단어로 찾기 → 다시 고르기 → 후보 10개',color:'blue',t:2.9},
+   {id:'b3',x:420,y:388,w:580,h:78,title:'참고 문서에서 찾기',fs:19,sub:'올릴 때 소제목별로 바꿔 둔 숫자로 → 가까운 조각 3개',color:'violet',t:3.2},
+   {id:'b4',x:1050,y:300,w:290,h:162,title:'사람이 체크',fs:21,sub:'처음엔 위에서 4개 체크\n넣고 빼서 고르기',color:'blue',tone:true,t:3.8},
+
+   {id:'c1',x:40,y:552,w:330,h:142,kind:'text',fs:16,lh:30,color:'rose',t:4.6,lines:['체크한 자료 (약 9천 토큰까지)','작성 지침 · 요구사항','앞 목차 요약 (용어 · 수치 맞추기)']},
+   {id:'c2',x:420,y:552,w:270,h:142,title:'AI 본문 작성',fs:21,sub:'근거가 없는 곳은\n⚠ 확인 필요',color:'rose',t:5.1},
+   {id:'c3',x:740,y:552,w:260,h:142,title:'AI 반영 점검',fs:21,sub:'요구사항마다\n✅ 반영 · ❌ 빠짐',color:'rose',t:5.5},
+   {id:'c4',x:1050,y:552,w:290,h:142,title:'내보내기',fs:21,sub:'템플릿 자리에 채우기\n없으면 새 docx · pptx',color:'rose',tone:true,t:5.9},
  ],edges:[
-   {from:'s1',to:'s2',t:.2,noPacket:true},{from:'s2',to:'s3',t:.5,noPacket:true},{from:'s3',to:'s4',t:.8,noPacket:true},{from:'s4',to:'s5',t:1.1,noPacket:true},
- ],extras:USE_MATRIX}},
+   {from:'a1',to:'a2',t:.6,color:'green'},{from:'a2',to:'a3',t:1.1,color:'green'},{from:'a3',to:'a4',t:1.6,color:'green'},
+   {from:'a4',to:'b1',fromSide:'b',toSide:'t',via:[[1195,244],[205,244]],t:2.3,color:'green',noPacket:true},
+   {from:'b1',to:'b2',fromSide:'r',toSide:'l',fromPos:.35,t:2.8},{from:'b1',to:'b3',fromSide:'r',toSide:'l',fromPos:.75,t:3.1,color:'violet'},
+   {from:'b2',to:'b4',fromSide:'r',toSide:'l',toPos:.3,t:3.6},{from:'b3',to:'b4',fromSide:'r',toSide:'l',toPos:.75,t:3.6,color:'violet'},
+   {from:'b4',to:'c1',fromSide:'b',toSide:'t',via:[[1195,486],[205,486]],t:4.5,color:'blue',noPacket:true},
+   {from:'c1',to:'c2',t:5.0,color:'rose'},{from:'c2',to:'c3',t:5.4,color:'rose'},{from:'c3',to:'c4',t:5.8,color:'rose'},
+ ]}},
 ];
 
 /* ───────── 렌더 ───────── */
