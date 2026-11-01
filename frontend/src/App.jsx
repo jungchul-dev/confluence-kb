@@ -4,6 +4,7 @@ import AskView from './views/AskView'
 import SearchView from './views/SearchView'
 import SyncView from './views/SyncView'
 import AnalyticsView from './views/AnalyticsView'
+import DraftView from './views/DraftView'
 import * as api from './api'
 import { BORDER, HOVER_BG, SELECTED_BG, STRONG_TEXT, MUTED_TEXT, FONT_SIZES } from './theme'
 
@@ -11,11 +12,12 @@ const NAV_ITEMS = [
   { key: 'ask', label: '질문' },
   { key: 'search', label: '검색' },
   { key: 'analytics', label: '분석' },
+  { key: 'drafts', label: '자료 작성' },
 ]
 const ADMIN_ITEMS = [
   { key: 'sync', label: '동기화' },
 ]
-const VIEW_TITLES = { ask: '질문', search: '검색', analytics: '분석', sync: '동기화' }
+const VIEW_TITLES = { ask: '질문', search: '검색', analytics: '분석', drafts: '자료 작성', sync: '동기화' }
 
 const NavItem = ({ label, isActive, onClick }) => (
   <Box
@@ -43,7 +45,7 @@ export default function App() {
     api.getSpaces().then(setSpaces).catch(() => {}).finally(() => setSpacesLoading(false))
   }, [])
 
-  const showSpaceFilter = tab === 'ask' || tab === 'search' || tab === 'analytics'
+  const showSpaceFilter = tab === 'ask' || tab === 'search' || tab === 'analytics' || tab === 'drafts'
   const spaceLabel = space.length === 0 ? '전체 공간' : space.length === 1 ? space[0] : `${space[0]} 외 ${space.length - 1}`
 
   return (
@@ -97,6 +99,7 @@ export default function App() {
           <Box sx={{ display: tab === 'ask' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><AskView space={space} /></Box>
           <Box sx={{ display: tab === 'search' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><SearchView space={space} /></Box>
           <Box sx={{ display: tab === 'analytics' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><AnalyticsView space={space} /></Box>
+          <Box sx={{ display: tab === 'drafts' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><DraftView space={space} /></Box>
           <Box sx={{ display: tab === 'sync' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}><SyncView /></Box>
         </Box>
       </Box>

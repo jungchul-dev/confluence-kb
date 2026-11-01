@@ -4,6 +4,15 @@ documents  : 페이지·첨부 메타 (출처 표시·변경 감지·권한)
 chunks     : 검색 단위 (본문 + 임베딩 + tsvector)
 sync_state : 페이지별 마지막 동기화 버전
 queries    : 질의 로그 (사용 청크·점수·응답 여부)
+
+자료 작성(요구사항 → 목차 · 선별 → (선택) 템플릿 → 생성) — 위 검색 테이블과 분리해 둔다
+templates          : 작성 건에 붙인 템플릿 (양식 파일 · 참고 문서). 미리 등록하지 않고 작성 중에 올린다
+template_sections  : 템플릿에서 뽑은 목차 (기록용 — 작성 건 목차는 draft_sections)
+drafts             : 작성 건 (이름 · 작성 개요 · 붙인 템플릿)
+draft_sections     : 작성 건의 목차 (제안 목차 또는 템플릿 목차) + 생성 결과
+draft_files        : 작성 건에 올린 요구사항 파일 (파싱 본문)
+draft_requirements : 요구사항 파일에서 뽑은 항목 (목차 배정 · 임베딩)
+draft_sources      : 목차별 후보·선별 자료 (조각 내용 사본)
 """
 import uuid
 from datetime import datetime
@@ -11,9 +20,9 @@ from typing import List, Optional
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
-    Boolean, Computed, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text,
+    Boolean, Computed, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.config import settings
@@ -135,3 +144,166 @@ class QueryLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
     __table_args__ = (Index("idx_queries_created", text("created_at DESC")),)
+
+
+# ───────── 자료 작성 ─────────
+# 검색 인덱스(documents · chunks)와 섞지 않는다. 업로드한 요구사항 문서가 일반 검색(/ask · /search)에 나오면 안 되기 때문이다.
+# 선별 자료는 chunks.id 를 참조하지 않는다. 재색인 때 청크를 지우고 새로 넣어 id 가 바뀌므로(worker/indexer.py),
+# document_id(SET NULL) + heading · ordinal + 내용 사본 + 그때의 content_hash 로 저장한다.
+
+
+class Template(Base):
+    """작성 건에 붙인 템플릿 (작성 건당 1개). 양식 파일과 참고 문서 중 하나 또는 둘 다 가진다."""
+
+    __tablename__ = "templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text, nullable=False)  # 화면 표시용 (올린 파일 이름)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_kind: Mapped[str] = mapped_column(String(16), nullable=False)  # form(양식 있음) | reference(참고 문서만)
+    # 양식 파일: {{자리 표시}} 가 들어간 docx · pptx 원본. 목차가 되고, 내보낼 때 이 파일에 본문을 채운다
+    file_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    file_bytes: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    # 참고 문서: 잘 쓴 문서 파일의 파싱 본문("## 소제목" 단위). 양식이 없으면 소제목이 목차가 되고,
+    # 생성할 때 목차와 가장 가까운 부분을 형식 · 문체 · 분량 예시로 넣는다 (사실 근거로는 쓰지 않는다)
+    ref_file_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ref_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class TemplateSection(Base):
+    __tablename__ = "template_sections"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("templates.id", ondelete="CASCADE"), nullable=False
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)  # "4. 장애 대응 체계"
+    query: Mapped[str] = mapped_column(Text, nullable=False, default="")  # 찾을 내용 (검색 질의)
+    guide: Mapped[str] = mapped_column(Text, nullable=False, default="")  # 작성 지침 (형식 · 분량 · 꼭 넣을 것)
+    space_keys: Mapped[List[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)  # 빈 배열 = 전체 공간
+    placeholder: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 템플릿 파일의 {{자리 표시}} 이름
+
+    __table_args__ = (Index("idx_template_sections_template", "template_id", "ordinal"),)
+
+
+class Draft(Base):
+    """작성 건 1개. 목차는 작성 개요 · 요구사항으로 제안받고, 템플릿을 붙이면 템플릿 목차로 바뀐다 (template_id = NULL 이면 템플릿 없이 작성)."""
+
+    __tablename__ = "drafts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text, nullable=False)  # "3분기 운영 보고서"
+    template_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("templates.id", ondelete="SET NULL"), nullable=True
+    )
+    doc_format: Mapped[str] = mapped_column(String(8), nullable=False, default="docx", server_default="docx")  # docx | pptx (만들 문서 형식)
+    overview: Mapped[str] = mapped_column(Text, nullable=False, default="")  # 작성 개요 — 목적 · 대상 · 범위 (검색 질의와 생성 프롬프트에 덧붙인다)
+    owner_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="collecting")  # 쓰지 않음 (화면에서 상태를 관리하지 않는다). 기존 DB 호환용
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    __table_args__ = (Index("idx_drafts_owner", "owner_id", text("updated_at DESC")),)
+
+
+class DraftSection(Base):
+    __tablename__ = "draft_sections"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False)
+    template_section_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("template_sections.id", ondelete="SET NULL"), nullable=True
+    )
+    # 제안 목차 또는 템플릿 목차 — 작성 건에서 따로 고칠 수 있다
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    query: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    guide: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    space_keys: Mapped[List[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    placeholder: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 생성 결과 (최신 1개). citations = [{"n": 1, "source_id": "...", "title": "...", "url": "..."}]
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    citations: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # 생성할 때마다 +1
+    generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("idx_draft_sections_draft", "draft_id", "ordinal"),)
+
+
+class DraftFile(Base):
+    """작성 건에 올린 요구사항 파일 (요청서 · 과업지시서 등). 파싱한 본문만 보관하고 검색 인덱스에는 넣지 않는다."""
+
+    __tablename__ = "draft_files"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False)
+    file_name: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")  # 파싱한 본문 (worker/parsers 재사용)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    __table_args__ = (Index("idx_draft_files_draft", "draft_id"),)
+
+
+class DraftRequirement(Base):
+    """요구사항 파일에서 뽑은 항목 1개. 목차에 배정해 그 목차의 검색 질의에 덧붙이고, 생성 후 누락 점검에 쓴다."""
+
+    __tablename__ = "draft_requirements"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False)
+    file_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("draft_files.id", ondelete="SET NULL"), nullable=True
+    )
+    section_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("draft_sections.id", ondelete="SET NULL"), nullable=True
+    )  # 배정된 목차 (NULL = 미배정)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # 원문 번호 (예: SFR-001)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # chunks 와 같은 모델 · 차원이어야 사내 문서와 바로 비교할 수 있다. 행 수가 적어 벡터 인덱스는 두지 않는다
+    embedding = mapped_column(Vector(settings.embedding_dim), nullable=True)
+    covered: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)  # 생성 결과가 다뤘는지 (점검 전 NULL)
+    coverage_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 판정 근거 · 빠진 점 한 문장
+
+    __table_args__ = (Index("idx_draft_requirements_draft", "draft_id", "ordinal"),)
+
+
+class DraftSource(Base):
+    """목차별 후보 · 선별 자료 1건. 자동 수집 후보도 남겨 두고 selected 로 고른 것만 생성에 쓴다."""
+
+    __tablename__ = "draft_sources"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False)
+    section_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("draft_sections.id", ondelete="CASCADE"), nullable=False
+    )
+    origin: Mapped[str] = mapped_column(String(16), nullable=False, default="auto")  # auto | manual | requirement
+    # 원문 위치 — 문서가 지워지면 document_id 만 NULL 이 되고 아래 사본으로 출처를 계속 보여 준다
+    document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+    draft_file_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("draft_files.id", ondelete="CASCADE"), nullable=True
+    )  # origin=requirement 일 때
+    doc_title: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    doc_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    doc_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    heading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    chunk_ordinal: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # NULL = 문서 전체
+    content: Mapped[str] = mapped_column(Text, nullable=False)  # 고른 시점의 내용 사본
+    content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # 고른 시점의 documents.content_hash
+    score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # 리랭크 점수 (auto)
+    selected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # 문서 통째로 고정
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        Index("idx_draft_sources_section", "section_id", "selected"),
+        Index("idx_draft_sources_document", "document_id"),
+    )

@@ -129,6 +129,39 @@ queries (
 
 권한 필터는 `documents.allowed_groups && :user_groups` 조건으로 검색 쿼리 안에서 건다. 검색 후 걸러내면 상위 k 가 줄어들어 품질이 흔들린다.
 
+### 4.1 자료 작성 테이블
+
+요구사항으로 목차를 정하고 목차별 자료를 모은 뒤, 사람이 고른 자료로 목차별 초안을 만든다. 템플릿은 미리 등록하지 않고 작성 건마다 자료 선별 뒤에 붙인다(선택). 검색 인덱스(`documents`·`chunks`)는 고치지 않고 따로 둔다 — 업로드한 요구사항 문서가 일반 검색에 섞이지 않게 하기 위해서다.
+
+```
+templates           작성 건에 붙인 템플릿 1개 (양식 파일 file_bytes={{자리 표시}} docx·pptx · 참고 문서 ref_content=파싱 본문, 둘 중 하나 이상)
+ └ template_sections 템플릿에서 뽑은 목차 (기록용)
+drafts              작성 건 (doc_format=docx | pptx, overview=작성 개요(목적·대상·범위), template_id=NULL 이면 템플릿 없이 작성)
+ ├ draft_sections   목차 (제안 목차 또는 템플릿 목차, title · query=찾을 내용 · guide=작성 지침 · placeholder) + 생성 결과(body · citations · version)
+ ├ draft_files      요구사항 파일 (파싱 본문만)
+ ├ draft_requirements 요구사항 항목 (section_id=배정 목차, embedding=chunks 와 같은 모델·차원, covered=누락 점검)
+ └ draft_sources    목차별 후보·선별 자료 (origin: auto | manual | requirement, selected · pinned)
+```
+
+- `draft_sources` 는 `chunks.id` 를 참조하지 않는다. 재색인 때 청크를 지우고 다시 넣어 id 가 바뀌기 때문이다. 대신 `document_id`(ON DELETE SET NULL) + `heading`·`chunk_ordinal` + **내용 사본** + 고른 시점의 `content_hash` 를 저장한다. 원문이 바뀌면 해시 비교로 "원문 수정됨" 을 표시하고, 원문이 지워져도 사본으로 출처를 보여 준다.
+- 작성 건을 지우면 하위 행은 모두 지워지고(CASCADE), 그 작성 건에만 붙어 있던 템플릿도 지운다.
+- `seed_data.py --reset` 은 전체 테이블을 지우므로 이 테이블들도 비워진다.
+
+### 4.2 자료 작성 흐름 (`app/services/drafting.py`, `app/routers/drafts.py`, 프론트 "자료 작성" 탭)
+
+화면은 작성 건 목록 + 단계별 작성 다이얼로그(기본 정보 → 요구사항 → 템플릿 · 참고 문서 → 목차 · 자료 선별 → 작성 · 검토)다.
+
+1. **기본 정보** — 문서 이름 · 문서 형식(docx 보고서 | pptx 발표 자료) · 작성 개요(목적 · 대상 · 범위)로 작성 건을 만든다. 이때 목차는 비어 있다.
+2. **요구사항** — 파일을 수집 파서(`worker/parsers`)로 풀고, LLM 으로 항목(원문 번호 · 내용)을 뽑는다(실패하면 `SFR-001` · `3.2.1` 같은 번호 줄을 항목으로). 요구사항이 없으면 건너뛴다.
+3. **템플릿 · 참고 문서 (선택)** — 올리면 저장만 하고, 목차는 다음 단계에서 만든다. ① 템플릿: 문서 형식과 같은 docx · pptx 의 `{{자리 표시}}` 가 목차 제목이 된다(자리 표시가 없는 docx 는 제목 스타일 문단). `{{문서명}}` `{{작성일}}` `{{참고자료}}` 는 예약어로, 목차가 아니라 내보낼 때 채운다. 템플릿이 올라가 있으면 문서 형식을 바꿀 수 없다. ② 참고 문서: 잘 쓴 비슷한 문서(pdf · docx · pptx · md · txt)를 파싱해 둔다. 소제목(페이지 · 시트 번호 같은 기계적 제목 제외, 2개 이상일 때)을 목차 제안의 바탕으로 쓰고, 생성할 때 목차와 같은 제목 또는 임베딩이 가장 가까운 부분(최대 1,000자)을 "형식 예시" 로 넣는다(사실은 옮기지 않도록 지시). 목차를 만든 뒤에 돌아와 바꾸면 [목차 다시 제안받기] 로 반영한다.
+4. **목차 제안** — 목차 · 자료 선별로 처음 넘어갈 때 목차가 비어 있으면 LLM 이 이름 · 작성 개요 · 요구사항 · 템플릿 · 참고 문서를 함께 보고 목차(제목 · 찾을 내용 · 작성 지침)를 제안한다. 템플릿이 있으면 제목 · 순서 · 자리 표시는 템플릿 그대로 두고 찾을 내용 · 작성 지침만 채운다. 템플릿 없이 참고 문서만 있으면 그 소제목 구성을 바탕으로 개요 · 요구사항에 맞게 고친다. 둘 다 없으면 4~8개를 새로 짠다(실패하면 템플릿 → 참고 문서 소제목 → 일반 목차). 요구사항은 항목 임베딩과 목차(제목 + 찾을 내용 + 지침) 임베딩의 코사인으로 가장 가까운 목차에 배정한다. 목차는 화면에서 추가 · 삭제 · 순서 변경 · 수정하고, 다시 제안받을 수 있다. 다시 제안하면 **고른 자료는 가장 가까운 새 목차로 옮기고**(색인 때 저장한 `chunks.embedding` · `documents.embedding` 을 재사용, 고르지 않은 후보 · 생성 본문은 버림) 요구사항은 다시 배정한다.
+5. **자료 수집** — 목차마다 `찾을 내용 + 배정된 요구사항(앞 3개) + 작성 개요 앞부분` 으로 기존 `hybrid_search` → `rerank` 를 돌려 상위 10개를 후보로, 그중 4개를 선택 상태로 넣는다. 찾는 공간은 화면 위쪽에서 고른 공간(비우면 전체)이다. 다시 모으면 선택하지 않은 자동 후보만 바뀐다.
+6. **선별** — 체크(선택) · 고정(문서 통째로) · 삭제, 검색 결과에서 조각 또는 문서 전체를 직접 추가. 원문 해시가 바뀌면 "원문 수정됨", 원문이 지워지면 "원문 삭제됨" 을 표시한다.
+7. **생성** — 목차 하나씩: 문서 형식(pptx 면 슬라이드용 개조식) + 작성 개요 + 앞 목차 요약(용어 · 수치 맞추기) + 작성 지침 + 요구사항 + 선택 자료(최대 약 9,000 토큰). 근거 없는 내용은 `[확인 필요: …]`, 출처는 `[n]`. 생성 후 LLM 으로 배정된 요구사항의 반영 여부(`covered`)와 근거(`coverage_note`)를 판정한다. 화면은 목차를 순서대로 하나씩 호출한다(앞 목차 결과가 다음 프롬프트에 들어가기 때문).
+8. **내보내기** — `app/services/draft_export.py`. 목차별 출처 번호를 문서 전체 번호로 다시 매긴다. docx 양식이면 자리 표시 문단을 본문(문단 · 목록 · 표)으로 바꾸고, pptx 양식이면 자리 표시 텍스트 상자를 글자로 채운다(표는 `열 | 열` 줄). 양식 파일이 없으면 새로 만든다 — docx: 제목 → 개요 → 목차 → 참고 자료, pptx: 표지 → 작성 개요 → 목차별 슬라이드(### 소제목마다 한 장, 글머리표 8개 넘으면 나눔, 표는 따로 한 장) → 참고 자료. 같은 출처가 겹친 `[1][1]` 은 하나로 합친다.
+
+파일 업로드는 multipart 대신 base64 JSON 으로 받는다(의존성 추가 없음, 상한 20MB). 작성 건(과 거기 붙인 템플릿)은 만든 사람(또는 전체 권한 사용자)만 본다. 자료 수집 · 직접 추가는 기존 권한 필터를 그대로 탄다.
+
 ## 5. 질의 파이프라인 (api-server)
 
 `POST /ask { question }` 한 번에 아래가 순서대로 돈다. 목표 응답 시간은 5초 안.
@@ -150,6 +183,13 @@ queries (
 | GET | `/documents/{page_id}` | 색인된 문서 메타와 청크 목록 |
 | GET | `/related-documents?document_id=&k=5` | 문서 임베딩 코사인 유사도 기반 유사 문서 (검색 화면 상세 칸). `/documents/{page_id}/related` 는 페이지 id 로 같은 결과 |
 | GET | `/admin/clusters?k=0&llm=true` | 문서 임베딩 K-Means 클러스터링 (k=0 이면 실루엣으로 자동, llm=true 면 LLM 제목, scikit-learn 필요) |
+| GET · POST · PUT · DELETE | `/drafts`, `/drafts/{id}` | 작성 건 (목록에 요구사항 · 고른 자료 · 작성된 목차 수 포함) |
+| POST · PUT · DELETE | `/drafts/{id}/outline`, `/drafts/{id}/sections[/{sid}]`, `/drafts/{id}/sections-order` | 목차 제안 · 추가 · 수정(본문 직접 수정 포함) · 삭제 · 순서 |
+| POST · PUT · DELETE | `/drafts/{id}/files`, `/drafts/{id}/requirements[/{rid}]`, `/drafts/{id}/requirements/reassign` | 요구사항 파일 → 항목 추출 · 목차 배정 |
+| POST · GET · PATCH · DELETE | `/drafts/{id}/collect`, `/drafts/{id}/sections/{sid}/sources`, `/drafts/{id}/sources/{src}` | 목차별 자료 수집 · 선별 · 직접 추가 |
+| POST · DELETE | `/drafts/{id}/template/form`, `/drafts/{id}/template/reference` | 템플릿 · 참고 문서 올리기(저장만, 목차 제안 때 사용) · 지우기 |
+| POST | `/drafts/{id}/sections/{sid}/generate` | 목차 하나 생성 + 요구사항 반영 점검 |
+| GET | `/drafts/{id}/export` | 문서 형식(docx | pptx)으로 내려받기 (양식이 있으면 양식에 채움) |
 | GET | `/admin/sync/status` | 공간별 마지막 동기화 시각·실패 건수 |
 | POST | `/admin/sync/run` | 공간 지정 수동 동기화 (관리자) |
 

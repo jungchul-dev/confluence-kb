@@ -65,7 +65,8 @@ export const theme = createTheme({
     button: { textTransform: 'none', fontWeight: 600 },
   },
   components: {
-    MuiCssBaseline: { styleOverrides: { body: { fontSize: '0.9375rem', lineHeight: 1.5 } } },
+    // 한글은 기본값이면 글자 단위로 줄이 바뀌어 단어가 잘린다. keep-all 로 단어(띄어쓰기) 단위로 바꾸고, 띄어쓰기 없는 긴 영문 · 경로만 어디서든 끊는다
+    MuiCssBaseline: { styleOverrides: { body: { fontSize: '0.9375rem', lineHeight: 1.5, wordBreak: 'keep-all', overflowWrap: 'anywhere' } } },
     MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
     MuiCard: {
       styleOverrides: {

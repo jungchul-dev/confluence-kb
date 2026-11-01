@@ -73,3 +73,60 @@ export const ask = async (question, { history = [], onMeta, onDelta, signal, spa
   }
   return done
 }
+
+// ───────── 자료 작성 ─────────
+// 파일은 base64 JSON 으로 보낸다 (서버 상한 20MB)
+export const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const r = new FileReader()
+  r.onload = () => resolve(String(r.result).split(',', 2)[1] || '')
+  r.onerror = () => reject(new Error('파일을 읽지 못했습니다.'))
+  r.readAsDataURL(file)
+})
+
+export const listDrafts = () => request('/drafts')
+export const getDraft = (id) => request(`/drafts/${id}`)
+export const createDraft = (name, overview, docFormat) => request('/drafts', { method: 'POST', body: { name, overview, doc_format: docFormat } })
+export const updateDraft = (id, body) => request(`/drafts/${id}`, { method: 'PUT', body })
+export const deleteDraft = (id) => request(`/drafts/${id}`, { method: 'DELETE' })
+
+// 목차 — 템플릿이 없으면 작성 개요 · 요구사항으로 제안받고 직접 고친다
+export const proposeOutline = (id, replace = false) => request(`/drafts/${id}/outline`, { method: 'POST', body: { replace } })
+export const addSection = (id, title) => request(`/drafts/${id}/sections`, { method: 'POST', body: { title } })
+export const updateDraftSection = (id, sectionId, body) => request(`/drafts/${id}/sections/${sectionId}`, { method: 'PUT', body })
+export const deleteSection = (id, sectionId) => request(`/drafts/${id}/sections/${sectionId}`, { method: 'DELETE' })
+export const reorderSections = (id, ids) => request(`/drafts/${id}/sections-order`, { method: 'PUT', body: { ids } })
+
+// 템플릿 (선택) — 자료 선별 뒤에 작성 건에 올린다. kind: form(양식 파일) | reference(참고 문서). 올리면 바로 쓴다
+export const uploadTemplateFile = async (id, kind, file, spaceKeys = []) => request(`/drafts/${id}/template/${kind}`, { method: 'POST', body: { file_name: file.name, data_base64: await fileToBase64(file), space_keys: spaceKeys } })
+export const removeTemplateFile = (id, kind) => request(`/drafts/${id}/template/${kind}`, { method: 'DELETE' })
+
+export const uploadRequirementFile = async (id, file) => request(`/drafts/${id}/files`, { method: 'POST', body: { file_name: file.name, data_base64: await fileToBase64(file) } })
+export const deleteRequirementFile = (id, fileId) => request(`/drafts/${id}/files/${fileId}`, { method: 'DELETE' })
+export const addRequirement = (id, content, sectionId) => request(`/drafts/${id}/requirements`, { method: 'POST', body: { content, section_id: sectionId || null } })
+export const updateRequirement = (id, reqId, body) => request(`/drafts/${id}/requirements/${reqId}`, { method: 'PUT', body })
+export const deleteRequirement = (id, reqId) => request(`/drafts/${id}/requirements/${reqId}`, { method: 'DELETE' })
+export const reassignRequirements = (id) => request(`/drafts/${id}/requirements/reassign`, { method: 'POST' })
+
+// spaceKeys: 위쪽에서 고른 공간 (비우면 전체)
+export const collectSources = (id, sectionId, spaceKeys = []) => request(`/drafts/${id}/collect`, { method: 'POST', body: { section_id: sectionId || null, space_keys: spaceKeys } })
+export const listSources = (id, sectionId) => request(`/drafts/${id}/sections/${sectionId}/sources`)
+export const updateSource = (id, sourceId, body) => request(`/drafts/${id}/sources/${sourceId}`, { method: 'PATCH', body })
+export const deleteSource = (id, sourceId) => request(`/drafts/${id}/sources/${sourceId}`, { method: 'DELETE' })
+export const addSource = (id, sectionId, { chunkId, documentId }) => request(`/drafts/${id}/sections/${sectionId}/sources`, { method: 'POST', body: { chunk_id: chunkId || null, document_id: documentId || null } })
+export const generateSection = (id, sectionId) => request(`/drafts/${id}/sections/${sectionId}/generate`, { method: 'POST' })
+
+// 내보내기 — 파일을 받아 바로 내려받기
+export const exportDraft = async (id, fallbackName) => {
+  const res = await fetch(`${BASE}/drafts/${id}/export`, { headers: headers() })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `${res.status} ${res.statusText}`)
+  }
+  const cd = res.headers.get('Content-Disposition') || ''
+  const m = cd.match(/filename\*=UTF-8''([^;]+)/)
+  const name = m ? decodeURIComponent(m[1]) : `${fallbackName}.docx`
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url; a.download = name; a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db.session import engine, ensure_schema
-from app.routers import admin, analytics, ask, search
+from app.routers import admin, analytics, ask, drafts, search
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ app.include_router(ask.router, prefix=API_PREFIX)
 app.include_router(search.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
+app.include_router(drafts.router, prefix=API_PREFIX)
 
 
 @app.get(f"{API_PREFIX}/health")
