@@ -321,14 +321,26 @@ const SLIDES=[
      '질문과 가까운 위치의 글을 찾음','','1. 장애 대응 절차','2. 서버 전환(페일오버) 절차','3. 서비스 약속(SLA) 정의']},
    {id:'b',x:740,y:190,w:600,h:300,kind:'text',title:'B. 단어로 찾기(키워드 검색, tsvector + mebac)',fs:20,lh:40,color:'blue',t:1.1,lines:[
      '핵심 단어: [[장애]] · [[누구]] · [[에스컬레이션]]','','1. 9월 운영 회의록 — 연락망','2. 장애 대응 절차']},
-   {id:'m',x:340,y:550,w:700,h:150,kind:'text',title:'합치기 — 두 검색(벡터·키워드)의 순위를 RRF(1/(60+순위))로 합산해 상위 50개 추출',fs:20,lh:36,color:'green',strong:true,t:2.0,lines:[
-     '1. 장애 대응 절차   {{← A · B 둘 다}}','2. 서버 전환 절차   3. 9월 운영 회의록   …  [[후보 50개 추출]]']},
- ],edges:[
-   {from:'q',to:'a',fromSide:'b',fromPos:.25,toSide:'t',toPos:.5,t:.5},
-   {from:'q',to:'b',fromSide:'b',fromPos:.75,toSide:'t',toPos:.5,t:.9},
-   {from:'a',to:'m',fromSide:'b',fromPos:.5,toSide:'t',toPos:.2,t:1.7,color:'green'},
-   {from:'b',to:'m',fromSide:'b',fromPos:.5,toSide:'t',toPos:.85,t:1.8,color:'green'},
- ]}},
+    {id:'m',x:340,y:550,w:700,h:150,kind:'text',title:'합치기 — 두 검색(벡터·키워드)의 순위를 RRF 로 합산해 상위 50개 추출',fs:20,lh:36,color:'green',strong:true,t:2.0,lines:[
+      '1. 장애 대응 절차   {{← A · B 둘 다}}','2. 서버 전환 절차   3. 9월 운영 회의록   …  [[후보 50개 추출]]']},
+  ],edges:[
+    {from:'q',to:'a',fromSide:'b',fromPos:.25,toSide:'t',toPos:.5,t:.5},
+    {from:'q',to:'b',fromSide:'b',fromPos:.75,toSide:'t',toPos:.5,t:.9},
+    {from:'a',to:'m',fromSide:'b',fromPos:.5,toSide:'t',toPos:.2,t:1.7,color:'green'},
+    {from:'b',to:'m',fromSide:'b',fromPos:.5,toSide:'t',toPos:.85,t:1.8,color:'green'},
+  ],extras:[
+    {t:2.5,svg:`<g transform="translate(1050,560)">
+      <rect x="0" y="0" width="310" height="140" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+      <text x="155" y="26" font-size="15" font-weight="700" fill="#15803d" text-anchor="middle">RRF 점수</text>
+      <line x1="20" y1="36" x2="290" y2="36" stroke="#bbf7d0" stroke-width="1"/>
+      <text x="25" y="85" font-size="20" font-weight="700" fill="#15803d" font-family="JetBrains Mono, monospace">RRF(d) =</text>
+      <text x="130" y="85" font-size="28" font-weight="700" fill="#15803d" font-family="JetBrains Mono, monospace">Σ</text>
+      <text x="200" y="72" font-size="18" font-weight="700" fill="#15803d" text-anchor="middle" font-family="JetBrains Mono, monospace">1</text>
+      <line x1="150" y1="78" x2="260" y2="78" stroke="#15803d" stroke-width="1.5"/>
+      <text x="210" y="100" font-size="16" font-weight="700" fill="#15803d" text-anchor="middle" font-family="JetBrains Mono, monospace">k + rank(d)</text>
+      <text x="155" y="128" font-size="13" font-weight="500" fill="#65a30d" text-anchor="middle" font-family="JetBrains Mono, monospace">k = 순위 상수 (일반적으로 60)</text>
+    </g>`},
+  ]}},
 
 /* 6 다시 고르기 */
 {num:'06',crumb:'다시 고르기',title:'다시 고르기',tech:'리랭킹',
