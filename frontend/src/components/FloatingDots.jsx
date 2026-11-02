@@ -7,7 +7,7 @@ import { forceSimulation, forceX, forceY, forceCollide } from 'd3-force'
  * 완성된 버블 차트의 "빈 버전"처럼 보이도록 파란 계열 색을 쓴다.
  */
 const DOT_COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8', '#4f46e5', '#6366f1']
-const DOT_COUNT = 22
+const DOT_COUNT = 40
 
 export default function FloatingDots() {
   const wrapRef = useRef(null)
@@ -34,15 +34,15 @@ export default function FloatingDots() {
       y: h / 2 + (Math.random() - 0.5) * h * 0.6,
       vx: 0, vy: 0,
       phase: Math.random() * Math.PI * 2,
-      speed: 0.4 + Math.random() * 0.5,
+      speed: 0.6 + Math.random() * 0.8,
     }))
     if (simRef.current) simRef.current.stop()
     const t0 = performance.now()
     const float = () => {
       const t = (performance.now() - t0) / 1000
       ns.forEach((n) => {
-        n.vx += Math.cos(t * n.speed + n.phase) * 0.05
-        n.vy += Math.sin(t * n.speed * 0.8 + n.phase * 1.7) * 0.05
+        n.vx += Math.cos(t * n.speed + n.phase) * 0.12
+        n.vy += Math.sin(t * n.speed * 0.8 + n.phase * 1.7) * 0.12
       })
     }
     const bound = () => {
@@ -53,13 +53,13 @@ export default function FloatingDots() {
       })
     }
     const s = forceSimulation(ns)
-      .force('x', forceX(w / 2).strength(0.015))
-      .force('y', forceY(h / 2).strength(0.015))
-      .force('collide', forceCollide((n) => n.r + 3).strength(0.9).iterations(2))
+      .force('x', forceX(w / 2).strength(0.005))
+      .force('y', forceY(h / 2).strength(0.005))
+      .force('collide', forceCollide((n) => n.r + 3).strength(0.95).iterations(3))
       .force('float', float)
       .alphaDecay(0)
-      .velocityDecay(0.35)
-      .alpha(0.4)
+      .velocityDecay(0.2)
+      .alpha(0.8)
       .on('tick', () => { bound(); setNodes(ns.map((n) => ({ ...n }))) })
     simRef.current = s
     return () => s.stop()
@@ -69,7 +69,7 @@ export default function FloatingDots() {
     <Box ref={wrapRef} sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <svg width={size.w} height={size.h} style={{ display: 'block' }}>
         {nodes.map((n) => (
-          <circle key={n.id} cx={n.x} cy={n.y} r={n.r} fill={n.color} opacity={0.55} />
+          <circle key={n.id} cx={n.x} cy={n.y} r={n.r} fill={n.color} opacity={0.55} style={{ transition: 'opacity 0.5s ease, r 0.5s ease' }} />
         ))}
       </svg>
     </Box>
