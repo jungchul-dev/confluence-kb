@@ -111,7 +111,7 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
   return (
     <Box ref={wrapRef} sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <svg width={size.w} height={size.h} style={{ display: 'block' }}>
-        {nodes.map((n) => {
+        {nodes.map((n, i) => {
           const fs = Math.max(12, Math.min(19, n.r / 4.8))
           const lh = fs * 1.2
           const maxLines = Math.max(1, Math.floor((n.r * 1.7) / lh) - 1)
@@ -123,7 +123,7 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
             <g
               key={n.id}
               transform={`translate(${n.x},${n.y})`}
-              style={{ cursor: 'pointer', opacity: selectedId && !selected ? 0.3 : 1, transition: 'opacity 0.2s' }}
+              style={{ cursor: 'pointer', opacity: selectedId && !selected ? 0.3 : 1, transition: 'opacity 0.3s ease', animation: `bubbleFadeIn 0.5s ease ${i * 0.04}s both` }}
               onMouseEnter={() => setHover({ id: n.id })}
               onMouseLeave={() => setHover(null)}
               onClick={() => onSelect?.(n)}
@@ -135,8 +135,8 @@ export default function FloatingBubbles({ items, selectedId, onSelect }) {
                 strokeWidth={selected ? 2 : 1}
               />
               <text textAnchor="middle" dominantBaseline="central" fill={n.textColor} style={{ fontSize: fs, fontWeight: 700, pointerEvents: 'none', fontFamily: 'inherit' }}>
-                {lines.map((l, i) => (
-                  <tspan key={i} x={0} y={y0 + i * lh} style={i === lines.length - 1 ? { fontWeight: 500, fontSize: fs * 0.85, opacity: 0.85 } : undefined}>{l}</tspan>
+                {lines.map((l, j) => (
+                  <tspan key={j} x={0} y={y0 + j * lh} style={j === lines.length - 1 ? { fontWeight: 500, fontSize: fs * 0.85, opacity: 0.85 } : undefined}>{l}</tspan>
                 ))}
               </text>
             </g>
