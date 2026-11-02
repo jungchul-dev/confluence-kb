@@ -75,6 +75,11 @@ export default function AnalyticsView({ space }) {
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes bubbleFadeIn { from { opacity: 0; } to { opacity: 1; } }
+      `}</style>
       <Card variant="outlined" sx={{ p: 2, flexShrink: 0 }}>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
         <Typography color="text.secondary">클러스터 수</Typography>
@@ -128,8 +133,8 @@ export default function AnalyticsView({ space }) {
         </Box>
       )}
 
-      {clusters.length > 0 && (
-        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 2 }}>
+      {!loading && clusters.length > 0 && (
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 2, animation: 'fadeIn 0.5s ease forwards' }}>
           {/* 버블 차트 */}
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <FloatingBubbles
